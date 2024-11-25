@@ -36,7 +36,7 @@ abstract class WoMediaService extends MediaService {
   static const avatarImportSettings = MediaImportSettings(
     imageMaxHeight: 512,
     imageMaxWidth: 512,
-    preferRearCamera: true,
+    preferFrontCamera: true,
     types: {MediaType.image},
     methods: [
       MediaImportMethodPickMedias(
@@ -336,5 +336,5 @@ extension on MediaPickSource {
 
 extension on MediaImportSettings {
   CameraDevice get preferredCameraDevice =>
-      preferRearCamera ? CameraDevice.rear : CameraDevice.front;
+      preferFrontCamera ? CameraDevice.front : CameraDevice.rear;
 }
