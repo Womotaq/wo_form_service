@@ -90,9 +90,16 @@ import 'package:wo_form_service/wo_form_service.dart';
 ///     - context.read<MediaService>().upload(medias, node.uploadFolderPath)
 
 class MediaField extends StatelessWidget {
-  const MediaField(this.data, {super.key});
+  const MediaField({required this.data, required this.mediaViewer, super.key});
 
   final WoFieldData<MediaInput, List<Media>?, MediaInputUiSettings> data;
+  final Widget Function({
+    required Media media,
+    BoxFit? fit,
+    Alignment alignment,
+    String? package,
+    Key? key,
+  }) mediaViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +125,7 @@ class MediaField extends StatelessWidget {
                                   data.input.aspectRatio == 0
                               ? null
                               : fieldHeight * data.input.aspectRatio!,
-                          child: MediaViewer(media: media),
+                          child: mediaViewer(media: media),
                         ),
                       ),
                     ),
@@ -221,7 +228,7 @@ class MediaField extends StatelessWidget {
           GestureDetector(
             onTap: onChanged == null ? null : () => edit(context, media),
             child: Center(
-              child: MediaViewer(media: media),
+              child: mediaViewer(media: media),
             ),
           ),
           _MediaActions(media: media, data: data),
@@ -264,6 +271,8 @@ class _MediaActions extends StatelessWidget {
     final medias = data.value ?? [];
     final onChanged = data.onValueChanged;
 
+    final index = medias.indexOf(media);
+
     return Container(
       height: 32,
       color:
@@ -278,13 +287,28 @@ class _MediaActions extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const IconButton(
-              onPressed: null,
-              icon: Icon(Icons.keyboard_arrow_left),
+            IconButton(
+              onPressed:
+                  data.onValueChanged == null || index == -1 || index == 0
+                      ? null
+                      : () => data.onValueChanged!(
+                            List<Media>.from(medias)
+                              ..removeAt(index)
+                              ..insert(index - 1, media),
+                          ),
+              icon: const Icon(Icons.keyboard_arrow_left),
             ),
-            const IconButton(
-              onPressed: null,
-              icon: Icon(Icons.keyboard_arrow_right),
+            IconButton(
+              onPressed: data.onValueChanged == null ||
+                      index == -1 ||
+                      index == medias.length - 1
+                  ? null
+                  : () => data.onValueChanged!(
+                        List<Media>.from(medias)
+                          ..removeAt(index)
+                          ..insert(index + 1, media),
+                      ),
+              icon: const Icon(Icons.keyboard_arrow_right),
             ),
             const Expanded(child: SizedBox.shrink()),
             IconButton(

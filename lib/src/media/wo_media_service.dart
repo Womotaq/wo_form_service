@@ -29,7 +29,9 @@ abstract class PermissionService {
 /// <key>NSMicrophoneUsageDescription</key>
 /// <string>Allow access to record videos.</string>
 abstract class WoMediaService extends MediaService {
-  const WoMediaService();
+  const WoMediaService({required this.permissionService});
+
+  final PermissionService permissionService;
 
   static const avatarImportSettings = MediaImportSettings(
     imageMaxHeight: 512,
@@ -269,6 +271,7 @@ abstract class WoMediaService extends MediaService {
     );
   }
 
+  // TODO : replace by importMedias
   /// It is recommended to crop an image when uploading.
   Future<MediaFile?> _pickAndCropLocalImage({
     required ImageSource source,
@@ -294,7 +297,7 @@ abstract class WoMediaService extends MediaService {
   }
 
   /// It is recommended to crop an image when uploading.
-  Future<MediaFile?> importAndCropImageFromGallery({
+  Future<MediaFile?> importImageAndCrop({
     required BuildContext context,
     double? aspectRatio,
     int? maxHeight,
@@ -309,7 +312,7 @@ abstract class WoMediaService extends MediaService {
       );
 
   /// It is recommended to crop an image when uploading.
-  Future<MediaFile?> takeAndCropPhoto({
+  Future<MediaFile?> takePhotoAndCrop({
     required BuildContext context,
     double? aspectRatio,
     int? maxHeight,
