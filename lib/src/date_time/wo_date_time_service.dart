@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:wo_form/wo_form.dart';
 import 'package:wo_form_service/src/date_time/pick_date_page.dart';
 
-class WoDateTimeService extends DateTimeService {
-  const WoDateTimeService();
+class DateTimeService {
+  const DateTimeService();
 
-  @override
   Future<DateTime?> pickDate({
     required BuildContext context,
     DateTime? initialDate,
