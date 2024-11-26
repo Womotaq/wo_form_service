@@ -40,17 +40,29 @@ class _PickDatePageState extends State<PickDatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final initialDate = widget.initialDate ?? DateTime.now();
+    final initialDate = (widget.initialDate ?? DateTime.now()).date;
+    final minBound = widget.minBound?.date;
+    final maxBound = widget.maxBound?.date;
+
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (context) => _YearDeltaCubit()),
         BlocProvider(
-          create: (context) => _DateCubit(
-            initialDate,
+          create: (context) => _FullMonthCubit(
+            initialDate.fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
-            dayScrollController: dayScrollController,
             yearDeltaCubit: context.read(),
+            minBound: minBound?.fullMonth,
+            maxBound: maxBound?.fullMonth,
+          ),
+        ),
+        BlocProvider(
+          create: (context) => _SelectedDateCubit(
+            initialDate,
+            fullMonthCubit: context.read(),
+            maxBound: maxBound,
+            minBound: minBound,
           ),
         ),
       ],
@@ -64,10 +76,19 @@ class _PickDatePageState extends State<PickDatePage> {
                 scrollController: yearScrollController,
                 scrollDirection: Axis.horizontal,
                 initialIndex: initialDate.year,
-                itemBuilder: (index, scrollController) => _YearWidget(
-                  year: index,
-                  scrollController: scrollController,
-                ),
+                itemBuilder: (index, scrollController) {
+                  if (minBound != null && index < minBound.year) {
+                    return null;
+                  }
+                  if (maxBound != null && index > maxBound.year) {
+                    return null;
+                  }
+
+                  return _YearWidget(
+                    year: index,
+                    scrollController: scrollController,
+                  );
+                },
               ),
             ),
             SizedBox(
@@ -76,10 +97,19 @@ class _PickDatePageState extends State<PickDatePage> {
                 scrollController: monthScrollController,
                 scrollDirection: Axis.horizontal,
                 initialIndex: initialDate.fullMonth,
-                itemBuilder: (index, scrollController) => _MonthWidget(
-                  fullMonth: index,
-                  scrollController: scrollController,
-                ),
+                itemBuilder: (index, scrollController) {
+                  if (minBound != null && index < minBound.fullMonth) {
+                    return null;
+                  }
+                  if (maxBound != null && index > maxBound.fullMonth) {
+                    return null;
+                  }
+
+                  return _MonthWidget(
+                    fullMonth: index,
+                    scrollController: scrollController,
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),
@@ -94,13 +124,17 @@ class _PickDatePageState extends State<PickDatePage> {
             ),
             RepositoryProvider.value(
               value: widget.woFormStatusCubit,
-              child: Builder(
-                builder: (context) {
+              child: BlocBuilder<_SelectedDateCubit, DateTime?>(
+                builder: (context, date) {
                   return SubmitButton(
                     SubmitButtonData(
-                      text: MaterialLocalizations.of(context).keyboardKeySelect,
+                      // TODO : empty localizations
+                      text: date == null
+                          ? 'Empty'
+                          : DateFormat.yMMMMEEEEd().format(date),
+                      // MaterialLocalizations.of(context).keyboardKeySelect,
                       onPressed: () => Navigator.of(context)
-                          .pop(context.read<_DateCubit>().state),
+                          .pop(context.read<_SelectedDateCubit>().state),
                       position: SubmitButtonPosition.body,
                       pageIndex: 0,
                     ),
@@ -123,32 +157,60 @@ class _PickDatePageState extends State<PickDatePage> {
   }
 }
 
-class _DateCubit extends Cubit<DateTime> {
-  _DateCubit(
+class _SelectedDateCubit extends Cubit<DateTime?> {
+  _SelectedDateCubit(
+    super.initialState, {
+    required this.fullMonthCubit,
+    required this.minBound,
+    required this.maxBound,
+  });
+
+  final _FullMonthCubit fullMonthCubit;
+  final DateTime? minBound;
+  final DateTime? maxBound;
+
+  DateTime _clamp(DateTime date) {
+    if (minBound != null && date.isBefore(minBound!)) return minBound!;
+    if (maxBound != null && date.isAfter(maxBound!)) return maxBound!;
+    return date;
+  }
+
+  void setDay(int day) {
+    final (year, month) = fullMonthCubit.state.yearAndMonth;
+    final newDate = DateTime(year, month, day);
+    if (_clamp(newDate) == newDate) emit(newDate);
+  }
+}
+
+class _FullMonthCubit extends Cubit<int> {
+  _FullMonthCubit(
     super.initialState, {
     required this.yearScrollController,
     required this.monthScrollController,
-    required this.dayScrollController,
     required this.yearDeltaCubit,
+    required this.minBound,
+    required this.maxBound,
   });
 
   final AutoScrollController yearScrollController;
   final AutoScrollController monthScrollController;
-  final AutoScrollController dayScrollController;
   final _YearDeltaCubit yearDeltaCubit;
+  final int? minBound;
+  final int? maxBound;
 
-  void setDay(int day) => emit(state.copyWith(day: day));
+  int _clamp(int fullMonth) {
+    if (minBound != null && fullMonth < minBound!) return minBound!;
+    if (maxBound != null && fullMonth > maxBound!) return maxBound!;
+    return fullMonth;
+  }
+
+  // void setDay(int day) => emit(_clamp(state.copyWith(day: day)));
 
   void setFullMonth(int fullMonth) {
-    var month = fullMonth % 12;
-    var year = fullMonth ~/ 12;
-    if (month == 0) {
-      month = 12;
-      year -= 1;
-    }
+    final (year, month) = fullMonth.yearAndMonth;
     final scrollYear = year != state.year;
 
-    emit(state.copyWith(year: year, month: month));
+    emit(_clamp(fullMonth));
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
       monthScrollController.scrollToIndex(
@@ -165,23 +227,28 @@ class _DateCubit extends Cubit<DateTime> {
   }
 
   void setYear(int year) {
-    final yearDelta = year - state.year;
-    emit(state.copyWith(year: year));
+    final newDate = _clamp(_FullMonth.build(year: year, month: state.month));
+    final yearDelta =
+        newDate.month == state.month ? newDate.year - state.year : null;
+    emit(newDate);
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
       yearScrollController.scrollToIndex(
-        year,
+        state.year,
         preferPosition: AutoScrollPosition.middle,
       );
-      yearDeltaCubit.increment(yearDelta);
 
-      // Let the _MonthWidgets apply year delta before srolling to their index
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        monthScrollController.scrollToIndex(
-          state.fullMonth,
-          preferPosition: AutoScrollPosition.middle,
-        );
-      });
+      if (yearDelta != null) {
+        yearDeltaCubit.increment(yearDelta);
+
+        // Let the _MonthWidgets apply year delta before srolling to their index
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          monthScrollController.scrollToIndex(
+            state,
+            preferPosition: AutoScrollPosition.middle,
+          );
+        });
+      }
     });
   }
 }
@@ -196,6 +263,26 @@ class _YearDeltaCubit extends Cubit<int> {
 
 extension on DateTime {
   int get fullMonth => year * 12 + month;
+  DateTime get date => DateTime(year, month, day);
+}
+
+extension _FullMonth on int {
+  static int build({required int year, required int month}) =>
+      year * 12 + month;
+
+  (int, int) get yearAndMonth {
+    var month = this % 12;
+    var year = this ~/ 12;
+    if (month == 0) {
+      month = 12;
+      year -= 1;
+    }
+
+    return (year, month);
+  }
+
+  int get year => yearAndMonth.$1;
+  int get month => yearAndMonth.$2;
 }
 
 class InfiniteListView extends StatefulWidget {
@@ -208,7 +295,7 @@ class InfiniteListView extends StatefulWidget {
   });
 
   final AutoScrollController scrollController;
-  final Widget Function(int index, AutoScrollController scrollController)
+  final Widget? Function(int index, AutoScrollController scrollController)
       itemBuilder;
   final Axis scrollDirection;
   final int? initialIndex;
@@ -282,7 +369,7 @@ class _YearWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<_DateCubit, DateTime, int>(
+    return BlocSelector<_FullMonthCubit, int, int>(
       selector: (date) => date.year,
       builder: (context, selectedYear) {
         return _SelectableIndex(
@@ -290,7 +377,7 @@ class _YearWidget extends StatelessWidget {
           selectedIndex: selectedYear,
           scrollController: scrollController,
           child: Text(year.toString()),
-          onSelect: () => context.read<_DateCubit>().setYear(year),
+          onSelect: () => context.read<_FullMonthCubit>().setYear(year),
         );
       },
     );
@@ -311,15 +398,15 @@ class _MonthWidget extends StatelessWidget {
     final fullMonth = this.fullMonth +
         context.select<_YearDeltaCubit, int>((c) => c.state * 12);
     final month = fullMonth % 12;
-    return BlocSelector<_DateCubit, DateTime, int>(
-      selector: (date) => date.fullMonth,
-      builder: (context, selectedFullMonth) {
+    return BlocBuilder<_FullMonthCubit, int>(
+      builder: (context, currentFullMonth) {
         return _SelectableIndex(
           index: fullMonth,
-          selectedIndex: selectedFullMonth,
+          selectedIndex: currentFullMonth,
           scrollController: scrollController,
           child: Text(DateFormat.MMMM().format(DateTime(1, month))),
-          onSelect: () => context.read<_DateCubit>().setFullMonth(fullMonth),
+          onSelect: () =>
+              context.read<_FullMonthCubit>().setFullMonth(fullMonth),
         );
       },
     );
@@ -345,59 +432,54 @@ class _SelectableIndex extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final yearWidget = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      child: child,
+    );
+
     return AutoScrollTag(
       key: ValueKey(index),
       controller: scrollController,
       index: index,
-      child: BlocSelector<_DateCubit, DateTime, int>(
-        selector: (date) => date.year,
-        builder: (context, selectedYear) {
-          final yearWidget = Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
-            child: child,
-          );
-
-          return TweenAnimationBuilder<Color?>(
-            duration: Durations.medium1,
-            tween: ColorTween(
-              begin: index == selectedIndex
-                  ? theme.disabledColor
-                  : theme.colorScheme.onPrimary,
-              end: index == selectedIndex
-                  ? theme.colorScheme.onPrimary
-                  : theme.disabledColor,
-            ),
-            builder: (context, color, child) => DefaultTextStyle(
-              style: index == selectedIndex
-                  ? theme.textTheme.bodyLarge!.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    )
-                  : TextStyle(color: color),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Center(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onSelect,
-                    child: index == selectedIndex
-                        ? Container(
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: yearWidget,
-                          )
-                        : yearWidget,
-                  ),
-                ),
+      child: TweenAnimationBuilder<Color?>(
+        duration: Durations.medium1,
+        tween: ColorTween(
+          begin: index == selectedIndex
+              ? theme.disabledColor
+              : theme.colorScheme.onPrimary,
+          end: index == selectedIndex
+              ? theme.colorScheme.onPrimary
+              : theme.disabledColor,
+        ),
+        builder: (context, color, child) => DefaultTextStyle(
+          style: index == selectedIndex
+              ? theme.textTheme.bodyLarge!.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                )
+              : TextStyle(color: color),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Center(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onSelect,
+                child: index == selectedIndex
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: yearWidget,
+                      )
+                    : yearWidget,
               ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -412,7 +494,11 @@ class _DateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateCubit = context.watch<_DateCubit>();
+    final fullMonthCubit = context.watch<_FullMonthCubit>();
+    final selectedDateCubit = context.watch<_SelectedDateCubit>();
+
+    final isSelectedMonth =
+        fullMonthCubit.state == selectedDateCubit.state?.fullMonth;
 
     return InfiniteListView(
       scrollController: scrollController,
@@ -422,10 +508,16 @@ class _DateWidget extends StatelessWidget {
           width: cellWidth * 7,
           height: cellWidth * 6,
           child: MonthlyCalendar(
-            year: dateCubit.state.year,
-            month: dateCubit.state.month,
-            selectedDay: dateCubit.state.day,
-            onSelect: dateCubit.setDay,
+            year: fullMonthCubit.state.year,
+            month: fullMonthCubit.state.month,
+            selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
+            onSelect: selectedDateCubit.setDay,
+            minDay: isSelectedMonth && selectedDateCubit.minBound != null
+                ? selectedDateCubit.minBound!.day
+                : null,
+            maxDay: isSelectedMonth && selectedDateCubit.maxBound != null
+                ? selectedDateCubit.maxBound!.day
+                : null,
           ),
         );
       },
@@ -439,6 +531,8 @@ class MonthlyCalendar extends StatelessWidget {
     required this.year,
     required this.month,
     this.selectedDay,
+    this.minDay,
+    this.maxDay,
     super.key,
   });
 
@@ -446,6 +540,8 @@ class MonthlyCalendar extends StatelessWidget {
   final int year;
   final int month;
   final int? selectedDay;
+  final int? minDay;
+  final int? maxDay;
 
   @override
   Widget build(BuildContext context) {
@@ -460,6 +556,10 @@ class MonthlyCalendar extends StatelessWidget {
       itemCount: days.length,
       itemBuilder: (context, index) {
         final day = days[index];
+        final selectable = day != null &&
+            !((minDay != null && day < minDay!) ||
+                (maxDay != null && day > maxDay!));
+
         return Center(
           child: SizedBox(
             width: 40,
@@ -484,9 +584,16 @@ class MonthlyCalendar extends StatelessWidget {
                       )
                     : InkWell(
                         borderRadius: BorderRadius.circular(40),
-                        onTap: () => onSelect(day),
+                        onTap: selectable ? () => onSelect(day) : null,
                         child: Center(
-                          child: Text(day.toString()),
+                          child: Text(
+                            day.toString(),
+                            style: selectable
+                                ? null
+                                : TextStyle(
+                                    color: Theme.of(context).disabledColor,
+                                  ),
+                          ),
                         ),
                       )
                 : const SizedBox.shrink(),
