@@ -19,6 +19,10 @@ class DateTimeService {
       );
     }
 
+    if (minBound != null && maxBound != null && minBound.isAfter(maxBound)) {
+      throw AssertionError('minBound must be before maxBound');
+    }
+
     return Navigator.push(
       context,
       MaterialPageRoute<DateTime>(

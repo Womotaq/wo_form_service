@@ -40,16 +40,35 @@ class _PickDatePageState extends State<PickDatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final initialDate = (widget.initialDate ?? DateTime.now()).date;
+    var initialDate = widget.initialDate?.date;
     final minBound = widget.minBound?.date;
     final maxBound = widget.maxBound?.date;
+
+    if (initialDate != null &&
+        minBound != null &&
+        initialDate.isBefore(minBound)) {
+      initialDate = null;
+    }
+    if (initialDate != null &&
+        maxBound != null &&
+        initialDate.isAfter(maxBound)) {
+      initialDate = null;
+    }
+
+    final initialDateSafe = initialDate ?? DateTime.now();
+    // if (minBound != null && initialDateSafe.isBefore(minBound)) {
+    //   initialDateSafe = minBound;
+    // }
+    // if (maxBound != null && initialDateSafe.isAfter(maxBound)) {
+    //   initialDateSafe = maxBound;
+    // }
 
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (context) => _YearDeltaCubit()),
         BlocProvider(
           create: (context) => _FullMonthCubit(
-            initialDate.fullMonth,
+            initialDateSafe.fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
             yearDeltaCubit: context.read(),
@@ -75,7 +94,9 @@ class _PickDatePageState extends State<PickDatePage> {
               child: InfiniteListView(
                 scrollController: yearScrollController,
                 scrollDirection: Axis.horizontal,
-                initialIndex: initialDate.year,
+                initialIndex: initialDateSafe.year,
+                minIndex: minBound?.year,
+                maxIndex: maxBound?.year,
                 itemBuilder: (index, scrollController) {
                   if (minBound != null && index < minBound.year) {
                     return null;
@@ -93,21 +114,34 @@ class _PickDatePageState extends State<PickDatePage> {
             ),
             SizedBox(
               height: 64,
-              child: InfiniteListView(
-                scrollController: monthScrollController,
-                scrollDirection: Axis.horizontal,
-                initialIndex: initialDate.fullMonth,
-                itemBuilder: (index, scrollController) {
-                  if (minBound != null && index < minBound.fullMonth) {
-                    return null;
-                  }
-                  if (maxBound != null && index > maxBound.fullMonth) {
-                    return null;
-                  }
+              child: BlocSelector<_YearDeltaCubit, int, int>(
+                selector: (yearDelta) => yearDelta * 12,
+                builder: (context, monthDelta) {
+                  return InfiniteListView(
+                    scrollController: monthScrollController,
+                    scrollDirection: Axis.horizontal,
+                    initialIndex: initialDateSafe.fullMonth + monthDelta,
+                    minIndex: minBound?.fullMonth,
+                    maxIndex: maxBound?.fullMonth,
+                    // minIndex: minBound == null
+                    //     ? null
+                    //     : minBound.fullMonth + monthDelta,
+                    // maxIndex: maxBound == null
+                    //     ? null
+                    //     : maxBound.fullMonth + monthDelta,
+                    itemBuilder: (index, scrollController) {
+                      if (minBound != null && index < minBound.fullMonth) {
+                        return null;
+                      }
+                      if (maxBound != null && index > maxBound.fullMonth) {
+                        return null;
+                      }
 
-                  return _MonthWidget(
-                    fullMonth: index,
-                    scrollController: scrollController,
+                      return _MonthWidget(
+                        fullMonth: index,
+                        scrollController: scrollController,
+                      );
+                    },
                   );
                 },
               ),
@@ -126,18 +160,27 @@ class _PickDatePageState extends State<PickDatePage> {
               value: widget.woFormStatusCubit,
               child: BlocBuilder<_SelectedDateCubit, DateTime?>(
                 builder: (context, date) {
-                  return SubmitButton(
-                    SubmitButtonData(
-                      // TODO : empty localizations
-                      text: date == null
-                          ? 'Empty'
-                          : DateFormat.yMMMMEEEEd().format(date),
-                      // MaterialLocalizations.of(context).keyboardKeySelect,
-                      onPressed: () => Navigator.of(context)
-                          .pop(context.read<_SelectedDateCubit>().state),
-                      position: SubmitButtonPosition.body,
-                      pageIndex: 0,
-                    ),
+                  if (date == null) return const SizedBox.shrink();
+
+                  return BlocBuilder<_FullMonthCubit, int>(
+                    builder: (context, fullMonth) {
+                      if (fullMonth != date.fullMonth) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return SubmitButton(
+                        SubmitButtonData(
+                          text:
+                              // DateFormat.yMMMMEEEEd().format(date),
+                              MaterialLocalizations.of(context)
+                                  .keyboardKeySelect,
+                          onPressed: () => Navigator.of(context)
+                              .pop(context.read<_SelectedDateCubit>().state),
+                          position: SubmitButtonPosition.body,
+                          pageIndex: 0,
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -204,22 +247,22 @@ class _FullMonthCubit extends Cubit<int> {
     return fullMonth;
   }
 
-  // void setDay(int day) => emit(_clamp(state.copyWith(day: day)));
-
   void setFullMonth(int fullMonth) {
-    final (year, month) = fullMonth.yearAndMonth;
-    final scrollYear = year != state.year;
+    final newFullMonth = _clamp(fullMonth);
+    final scrollYear = newFullMonth.year != state.year;
 
-    emit(_clamp(fullMonth));
+    emit(newFullMonth);
+
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
       monthScrollController.scrollToIndex(
-        fullMonth,
+        state,
         preferPosition: AutoScrollPosition.middle,
       );
+
       if (scrollYear) {
         yearScrollController.scrollToIndex(
-          year,
+          state.year,
           preferPosition: AutoScrollPosition.middle,
         );
       }
@@ -227,10 +270,11 @@ class _FullMonthCubit extends Cubit<int> {
   }
 
   void setYear(int year) {
-    final newDate = _clamp(_FullMonth.build(year: year, month: state.month));
-    final yearDelta =
-        newDate.month == state.month ? newDate.year - state.year : null;
-    emit(newDate);
+    final fullMonth = _clamp(_FullMonth.build(year: year, month: state.month));
+    final yearDelta = fullMonth.year - state.year;
+
+    emit(fullMonth);
+
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
       yearScrollController.scrollToIndex(
@@ -238,17 +282,15 @@ class _FullMonthCubit extends Cubit<int> {
         preferPosition: AutoScrollPosition.middle,
       );
 
-      if (yearDelta != null) {
-        yearDeltaCubit.increment(yearDelta);
+      yearDeltaCubit.increment(yearDelta);
 
-        // Let the _MonthWidgets apply year delta before srolling to their index
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          monthScrollController.scrollToIndex(
-            state,
-            preferPosition: AutoScrollPosition.middle,
-          );
-        });
-      }
+      // Let the _MonthWidgets apply year delta before srolling to their index
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        monthScrollController.scrollToIndex(
+          state,
+          preferPosition: AutoScrollPosition.middle,
+        );
+      });
     });
   }
 }
@@ -291,6 +333,8 @@ class InfiniteListView extends StatefulWidget {
     required this.itemBuilder,
     this.scrollDirection = Axis.vertical,
     this.initialIndex,
+    this.minIndex,
+    this.maxIndex,
     super.key,
   });
 
@@ -299,6 +343,8 @@ class InfiniteListView extends StatefulWidget {
       itemBuilder;
   final Axis scrollDirection;
   final int? initialIndex;
+  final int? minIndex;
+  final int? maxIndex;
 
   @override
   State<InfiniteListView> createState() => _InfiniteListViewState();
@@ -335,20 +381,54 @@ class _InfiniteListViewState extends State<InfiniteListView> {
             // reverse
             SliverList(
               delegate: SliverChildBuilderDelegate(
-                (_, int index) => widget.itemBuilder(
-                  (widget.initialIndex ?? 0) - index - 1,
-                  widget.scrollController,
-                ),
+                // (_, int index) =>  widget.itemBuilder(
+                //   (widget.initialIndex ?? 0) - index - 1,
+                //   widget.scrollController,
+                // ),
+                (_, int index) {
+                  final movedIndex = (widget.initialIndex ?? 0) - index - 1;
+                  final child = widget.itemBuilder(
+                    movedIndex,
+                    widget.scrollController,
+                  );
+                  if (child == null) {
+                    if (widget.minIndex != null &&
+                        movedIndex > widget.minIndex!) {
+                      return Container(
+                        width: 30,
+                        height: 30,
+                        color: Colors.red,
+                      );
+                    }
+                  }
+                  return child;
+                },
               ),
             ),
             // forward
             SliverList(
               key: forwardListKey,
               delegate: SliverChildBuilderDelegate(
-                (_, int index) => widget.itemBuilder(
-                  (widget.initialIndex ?? 0) + index,
-                  widget.scrollController,
-                ),
+                (_, int index) {
+                  final movedIndex = (widget.initialIndex ?? 0) + index;
+                  final child = widget.itemBuilder(
+                    movedIndex,
+                    widget.scrollController,
+                  );
+                  if (child == null) {
+                    print(movedIndex);
+                    if (widget.maxIndex != null &&
+                        movedIndex < widget.maxIndex!) {
+                      return Container(
+                        width: 30,
+                        height: 30,
+                        color: Colors.blue,
+                      );
+                      // return const SizedBox.shrink();
+                    }
+                  }
+                  return child;
+                },
               ),
             ),
           ],
@@ -395,8 +475,6 @@ class _MonthWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fullMonth = this.fullMonth +
-        context.select<_YearDeltaCubit, int>((c) => c.state * 12);
     final month = fullMonth % 12;
     return BlocBuilder<_FullMonthCubit, int>(
       builder: (context, currentFullMonth) {
@@ -494,11 +572,12 @@ class _DateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fullMonthCubit = context.watch<_FullMonthCubit>();
+    final fullMonth = context.watch<_FullMonthCubit>().state;
     final selectedDateCubit = context.watch<_SelectedDateCubit>();
 
-    final isSelectedMonth =
-        fullMonthCubit.state == selectedDateCubit.state?.fullMonth;
+    final isSelectedMonth = fullMonth == selectedDateCubit.state?.fullMonth;
+    final minBound = selectedDateCubit.minBound;
+    final maxBound = selectedDateCubit.maxBound;
 
     return InfiniteListView(
       scrollController: scrollController,
@@ -508,15 +587,23 @@ class _DateWidget extends StatelessWidget {
           width: cellWidth * 7,
           height: cellWidth * 6,
           child: MonthlyCalendar(
-            year: fullMonthCubit.state.year,
-            month: fullMonthCubit.state.month,
+            year: fullMonth.year,
+            month: fullMonth.month,
             selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
             onSelect: selectedDateCubit.setDay,
-            minDay: isSelectedMonth && selectedDateCubit.minBound != null
-                ? selectedDateCubit.minBound!.day
+            minDay: minBound != null
+                ? minBound.fullMonth == fullMonth
+                    ? minBound.day
+                    : minBound.fullMonth > fullMonth
+                        ? 32
+                        : null
                 : null,
-            maxDay: isSelectedMonth && selectedDateCubit.maxBound != null
-                ? selectedDateCubit.maxBound!.day
+            maxDay: maxBound != null
+                ? maxBound.fullMonth == fullMonth
+                    ? maxBound.day
+                    : maxBound.fullMonth < fullMonth
+                        ? -1
+                        : null
                 : null,
           ),
         );
@@ -578,6 +665,7 @@ class MonthlyCalendar extends StatelessWidget {
                             day.toString(),
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
