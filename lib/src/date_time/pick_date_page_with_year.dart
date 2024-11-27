@@ -6,17 +6,17 @@ import 'package:wo_form/wo_form.dart';
 class PickDatePageWithYear extends StatefulWidget {
   const PickDatePageWithYear({
     required this.woFormStatusCubit,
+    this.minDate,
+    this.maxDate,
     this.initialDate,
-    this.maxBound,
-    this.minBound,
     this.dateFormat,
     super.key,
   });
 
   final WoFormStatusCubit woFormStatusCubit;
+  final DateTime? minDate;
+  final DateTime? maxDate;
   final DateTime? initialDate;
-  final DateTime? maxBound;
-  final DateTime? minBound;
   final String? dateFormat;
 
   @override
@@ -34,28 +34,27 @@ class _PickDatePageWithYearState extends State<PickDatePageWithYear> {
     super.initState();
 
     initialDateSafe = widget.initialDate ?? DateTime.now();
-    if (widget.minBound != null &&
-        initialDateSafe!.isBefore(widget.minBound!)) {
+    if (widget.minDate != null && initialDateSafe!.isBefore(widget.minDate!)) {
       initialDateSafe = null;
-    } else if (widget.maxBound != null &&
-        initialDateSafe!.isAfter(widget.maxBound!)) {
+    } else if (widget.maxDate != null &&
+        initialDateSafe!.isAfter(widget.maxDate!)) {
       initialDateSafe = null;
     }
 
     final yearMonthCenter =
-        initialDateSafe ?? widget.minBound ?? widget.maxBound ?? DateTime.now();
+        initialDateSafe ?? widget.minDate ?? widget.maxDate ?? DateTime.now();
 
     yearScrollController = InfinitePageController(
       initialIndex: yearMonthCenter.year,
-      minIndex: widget.minBound?.year,
-      maxIndex: widget.maxBound?.year,
+      minIndex: widget.minDate?.year,
+      maxIndex: widget.maxDate?.year,
       viewportFraction: .25,
     );
     monthScrollController = InfinitePageController(
       initialIndex: yearMonthCenter.fullMonth
-          ._clamp(widget.minBound?.fullMonth, widget.maxBound?.fullMonth),
-      minIndex: widget.minBound?.fullMonth,
-      maxIndex: widget.maxBound?.fullMonth,
+          ._clamp(widget.minDate?.fullMonth, widget.maxDate?.fullMonth),
+      minIndex: widget.minDate?.fullMonth,
+      maxIndex: widget.maxDate?.fullMonth,
       viewportFraction: .32,
     );
     dayScrollController = InfinitePageController(
@@ -63,25 +62,25 @@ class _PickDatePageWithYearState extends State<PickDatePageWithYear> {
       // minIndex: -1,
       // maxIndex: 5,
       initialIndex: widget.initialDate?.fullMonth ?? 0,
-      maxIndex: widget.maxBound?.fullMonth,
-      minIndex: widget.minBound?.fullMonth,
+      maxIndex: widget.maxDate?.fullMonth,
+      minIndex: widget.minDate?.fullMonth,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     var initialDate = widget.initialDate?.date;
-    final minBound = widget.minBound?.date;
-    final maxBound = widget.maxBound?.date;
+    final minDate = widget.minDate?.date;
+    final maxDate = widget.maxDate?.date;
 
     if (initialDate != null &&
-        minBound != null &&
-        initialDate.isBefore(minBound)) {
+        minDate != null &&
+        initialDate.isBefore(minDate)) {
       initialDate = null;
     }
     if (initialDate != null &&
-        maxBound != null &&
-        initialDate.isAfter(maxBound)) {
+        maxDate != null &&
+        initialDate.isAfter(maxDate)) {
       initialDate = null;
     }
 
@@ -93,16 +92,16 @@ class _PickDatePageWithYearState extends State<PickDatePageWithYear> {
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
             dayPageController: dayScrollController,
-            minBound: minBound?.fullMonth,
-            maxBound: maxBound?.fullMonth,
+            minDate: minDate?.fullMonth,
+            maxDate: maxDate?.fullMonth,
           ),
         ),
         BlocProvider(
           create: (context) => _SelectedDateCubit(
             initialDate,
             fullMonthCubit: context.read(),
-            maxBound: maxBound,
-            minBound: minBound,
+            maxDate: maxDate,
+            minDate: minDate,
           ),
         ),
       ],
@@ -130,7 +129,7 @@ class _PickDatePageWithYearState extends State<PickDatePageWithYear> {
             Center(
               child: SizedBox(
                 width: _DateWidget.cellWidth * 7,
-                height: _DateWidget.cellWidth * 6,
+                height: _DateWidget.cellWidth * 7,
                 child: _DateWidget(controller: dayScrollController),
               ),
             ),
@@ -183,23 +182,22 @@ class _SelectedDateCubit extends Cubit<DateTime?> {
   _SelectedDateCubit(
     super.initialState, {
     required this.fullMonthCubit,
-    required this.minBound,
-    required this.maxBound,
+    required this.minDate,
+    required this.maxDate,
   });
 
   final _FullMonthCubit fullMonthCubit;
-  final DateTime? minBound;
-  final DateTime? maxBound;
+  final DateTime? minDate;
+  final DateTime? maxDate;
 
   DateTime _clamp(DateTime date) {
-    if (minBound != null && date.isBefore(minBound!)) return minBound!;
-    if (maxBound != null && date.isAfter(maxBound!)) return maxBound!;
+    if (minDate != null && date.isBefore(minDate!)) return minDate!;
+    if (maxDate != null && date.isAfter(maxDate!)) return maxDate!;
     return date;
   }
 
   void setDay(int day) {
-    final (year, month) = fullMonthCubit.state.yearAndMonth;
-    final newDate = DateTime(year, month, day);
+    final newDate = DateTime(0, fullMonthCubit.state, day);
     if (_clamp(newDate) == newDate) emit(newDate);
   }
 }
@@ -210,22 +208,22 @@ class _FullMonthCubit extends Cubit<int> {
     required this.yearScrollController,
     required this.monthScrollController,
     required this.dayPageController,
-    required this.minBound,
-    required this.maxBound,
+    required this.minDate,
+    required this.maxDate,
   });
 
   final InfinitePageController yearScrollController;
   final InfinitePageController monthScrollController;
   final InfinitePageController dayPageController;
-  final int? minBound;
-  final int? maxBound;
+  final int? minDate;
+  final int? maxDate;
 
   bool _locked = false;
 
   Future<void> setFullMonth(int fullMonth, {bool fromMonths = false}) async {
     if (_locked) return;
 
-    final newFullMonth = fullMonth._clamp(minBound, maxBound);
+    final newFullMonth = fullMonth._clamp(minDate, maxDate);
     final scrollYear = newFullMonth.year != state.year;
 
     if (newFullMonth == state) return;
@@ -250,7 +248,7 @@ class _FullMonthCubit extends Cubit<int> {
     if (_locked) return;
 
     final fullMonth = _FullMonth.build(year: year, month: state.month)
-        ._clamp(minBound, maxBound);
+        ._clamp(minDate, maxDate);
 
     if (fullMonth == state) return;
     _locked = true;
@@ -413,38 +411,25 @@ class _DateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedDateCubit = context.watch<_SelectedDateCubit>();
-    final minBound = selectedDateCubit.minBound;
-    final maxBound = selectedDateCubit.maxBound;
+    final minDate = selectedDateCubit.minDate;
+    final maxDate = selectedDateCubit.maxDate;
 
     return InfinitePageView(
       controller: controller,
       onPageChanged: (index) =>
           context.read<_FullMonthCubit>().setFullMonth(index),
       itemBuilder: (context, index) {
-        final isSelectedMonth = index == selectedDateCubit.state?.fullMonth;
-        return SizedBox(
-          width: cellWidth * 7,
-          height: cellWidth * 6,
-          child: MonthlyCalendar(
-            year: index.year,
-            month: index.month,
-            selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
-            onSelect: selectedDateCubit.setDay,
-            minDay: minBound != null
-                ? minBound.fullMonth == index
-                    ? minBound.day
-                    : minBound.fullMonth > index
-                        ? 32
-                        : null
-                : null,
-            maxDay: maxBound != null
-                ? maxBound.fullMonth == index
-                    ? maxBound.day
-                    : maxBound.fullMonth < index
-                        ? -1
-                        : null
-                : null,
-          ),
+        return Column(
+          children: [
+            const DaysOfWeek(),
+            MonthlyCalendar(
+              fullMonth: index,
+              selectedDate: selectedDateCubit.state,
+              onSelect: selectedDateCubit.setDay,
+              minDate: minDate,
+              maxDate: maxDate,
+            ),
+          ],
         );
       },
     );
@@ -453,26 +438,41 @@ class _DateWidget extends StatelessWidget {
 
 class MonthlyCalendar extends StatelessWidget {
   const MonthlyCalendar({
-    required this.onSelect,
-    required this.year,
-    required this.month,
-    this.selectedDay,
-    this.minDay,
-    this.maxDay,
+    required this.fullMonth,
+    this.selectedDate,
+    this.minDate,
+    this.maxDate,
+    this.onSelect,
     super.key,
   });
 
-  final void Function(int day) onSelect;
-  final int year;
-  final int month;
-  final int? selectedDay;
-  final int? minDay;
-  final int? maxDay;
+  final int fullMonth;
+  final DateTime? selectedDate;
+  final DateTime? minDate;
+  final DateTime? maxDate;
+  final void Function(int day)? onSelect;
 
   @override
   Widget build(BuildContext context) {
     // Generate the calendar grid for the given month
-    final days = _generateCalendar(year, month);
+    final days = _generateCalendar(fullMonth.year, fullMonth.month);
+
+    final selectedDay =
+        fullMonth == selectedDate?.fullMonth ? selectedDate!.day : null;
+    final minDay = minDate != null
+        ? minDate!.fullMonth == fullMonth
+            ? minDate!.day
+            : minDate!.fullMonth > fullMonth
+                ? 32
+                : null
+        : null;
+    final maxDay = maxDate != null
+        ? maxDate!.fullMonth == fullMonth
+            ? maxDate!.day
+            : maxDate!.fullMonth < fullMonth
+                ? -1
+                : null
+        : null;
 
     return GridView.builder(
       shrinkWrap: true,
@@ -480,23 +480,12 @@ class MonthlyCalendar extends StatelessWidget {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7, // 7 days in a week
       ),
-      itemCount: days.length + 7,
+      itemCount: days.length,
       itemBuilder: (context, index) {
-        if (index < 7) {
-          return Center(
-            child: Text(
-              DateFormat(DateFormat.ABBR_WEEKDAY)
-                  .format(DateTime(1, 1, index))[0],
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          );
-        }
-        index -= 7;
-
         final day = days[index];
         final selectable = day != null &&
-            !((minDay != null && day < minDay!) ||
-                (maxDay != null && day > maxDay!));
+            !((minDay != null && day < minDay) ||
+                (maxDay != null && day > maxDay));
 
         return Center(
           child: SizedBox(
@@ -523,7 +512,11 @@ class MonthlyCalendar extends StatelessWidget {
                       )
                     : InkWell(
                         borderRadius: BorderRadius.circular(40),
-                        onTap: selectable ? () => onSelect(day) : null,
+                        onTap: onSelect == null
+                            ? null
+                            : selectable
+                                ? () => onSelect!(day)
+                                : null,
                         child: Center(
                           child: Text(
                             day.toString(),
@@ -561,6 +554,31 @@ class MonthlyCalendar extends StatelessWidget {
     }
 
     return days;
+  }
+}
+
+class DaysOfWeek extends StatelessWidget {
+  const DaysOfWeek({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 7,
+      ),
+      itemCount: 7,
+      itemBuilder: (context, index) {
+        return Center(
+          child: Text(
+            DateFormat(DateFormat.ABBR_WEEKDAY)
+                .format(DateTime(1, 1, index))[0],
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -8,8 +8,8 @@ class DateTimeService {
   Future<DateTime?> pickDate({
     required BuildContext context,
     DateTime? initialDate,
-    DateTime? maxBound,
-    DateTime? minBound,
+    DateTime? maxDate,
+    DateTime? minDate,
     DatePickerEntryMode? initialEntryMode,
     DatePickerMode? initialDatePickerMode,
     String? dateFormat,
@@ -21,23 +21,37 @@ class DateTimeService {
       );
     }
 
-    if (minBound != null && maxBound != null && minBound.isAfter(maxBound)) {
+    if (minDate != null && maxDate != null && minDate.isAfter(maxDate)) {
       throw AssertionError('minBound must be before maxBound');
     }
 
     return Navigator.push(
       context,
       MaterialPageRoute<DateTime>(
-        builder: (_) => switch (initialDatePickerMode) {
-          DatePickerMode.year => PickDatePageWithYear(
-              woFormStatusCubit: context.read(),
-              initialDate: initialDate,
-              maxBound: maxBound,
-              minBound: minBound,
-              dateFormat: dateFormat,
-            ),
-          DatePickerMode.day || null => const PickDatePage(),
-        },
+        builder: (_) => minDate == null
+            ? PickDatePageWithYear(
+                woFormStatusCubit: context.read(),
+                minDate: minDate,
+                maxDate: maxDate,
+                initialDate: initialDate,
+                dateFormat: dateFormat,
+              )
+            : switch (initialDatePickerMode) {
+                DatePickerMode.year => PickDatePageWithYear(
+                    woFormStatusCubit: context.read(),
+                    minDate: minDate,
+                    maxDate: maxDate,
+                    initialDate: initialDate,
+                    dateFormat: dateFormat,
+                  ),
+                DatePickerMode.day || null => PickDatePage(
+                    woFormStatusCubit: context.read(),
+                    minDate: minDate,
+                    maxDate: maxDate,
+                    initialDate: initialDate,
+                    dateFormat: dateFormat,
+                  ),
+              },
       ),
     );
   }
