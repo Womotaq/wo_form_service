@@ -29,7 +29,7 @@ class PickDatePage extends StatefulWidget {
 class _PickDatePageState extends State<PickDatePage> {
   late final AutoScrollController yearScrollController;
   late final AutoScrollController monthScrollController;
-  late final InfiniteCarouselController dayScrollController;
+  late final InfinitePageController dayScrollController;
 
   @override
   void initState() {
@@ -37,7 +37,14 @@ class _PickDatePageState extends State<PickDatePage> {
 
     yearScrollController = AutoScrollController(axis: Axis.horizontal);
     monthScrollController = AutoScrollController(axis: Axis.horizontal);
-    dayScrollController = InfiniteCarouselController();
+    dayScrollController = InfinitePageController(
+      // initialIndex: 3,
+      // minIndex: -1,
+      // maxIndex: 5,
+      initialIndex: widget.initialDate?.fullMonth ?? 0,
+      maxIndex: widget.maxBound?.fullMonth,
+      minIndex: widget.minBound?.fullMonth,
+    );
   }
 
   @override
@@ -75,7 +82,7 @@ class _PickDatePageState extends State<PickDatePage> {
             initialDateSafe?.fullMonth ?? DateTime.now().fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
-            dayCarouselController: dayScrollController,
+            dayPageController: dayScrollController,
             yearDeltaCubit: context.read(),
             minBound: minBound?.fullMonth,
             maxBound: maxBound?.fullMonth,
@@ -211,7 +218,7 @@ class _FullMonthCubit extends Cubit<int> {
     super.initialState, {
     required this.yearScrollController,
     required this.monthScrollController,
-    required this.dayCarouselController,
+    required this.dayPageController,
     required this.yearDeltaCubit,
     required this.minBound,
     required this.maxBound,
@@ -219,7 +226,7 @@ class _FullMonthCubit extends Cubit<int> {
 
   final AutoScrollController yearScrollController;
   final AutoScrollController monthScrollController;
-  final InfiniteCarouselController dayCarouselController;
+  final InfinitePageController dayPageController;
   final _YearDeltaCubit yearDeltaCubit;
   final int? minBound;
   final int? maxBound;
@@ -228,9 +235,14 @@ class _FullMonthCubit extends Cubit<int> {
     final newFullMonth = fullMonth._clamp(minBound, maxBound);
     final scrollYear = newFullMonth.year != state.year;
 
+    if (newFullMonth == state) return;
     emit(newFullMonth);
 
-    dayCarouselController.animateToIndex(fullMonth);
+    dayPageController.animateToPage(
+      fullMonth,
+      duration: Durations.medium1,
+      curve: Curves.easeInOut,
+    );
 
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -253,9 +265,14 @@ class _FullMonthCubit extends Cubit<int> {
         ._clamp(minBound, maxBound);
     final yearDelta = fullMonth.year - state.year;
 
+    if (fullMonth == state) return;
     emit(fullMonth);
 
-    dayCarouselController.animateToIndex(fullMonth);
+    dayPageController.jumpToPage(
+      fullMonth,
+      // duration: Durations.medium1,
+      // curve: Curves.easeInOut,
+    );
 
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -528,9 +545,9 @@ class _SelectableIndex extends StatelessWidget {
           style: index == selectedIndex
               ? theme.textTheme.bodyLarge!.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: color,
+                  color: theme.colorScheme.onPrimary,
                 )
-              : TextStyle(color: color),
+              : TextStyle(color: theme.disabledColor),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Center(
@@ -558,28 +575,23 @@ class _SelectableIndex extends StatelessWidget {
 class _DateWidget extends StatelessWidget {
   const _DateWidget({required this.controller});
 
-  final InfiniteCarouselController controller;
+  final InfinitePageController controller;
 
   static const cellWidth = 48;
 
   @override
   Widget build(BuildContext context) {
-    final fullMonth = context.watch<_FullMonthCubit>().state;
     final selectedDateCubit = context.watch<_SelectedDateCubit>();
 
-    final isSelectedMonth = fullMonth == selectedDateCubit.state?.fullMonth;
     final minBound = selectedDateCubit.minBound;
     final maxBound = selectedDateCubit.maxBound;
 
-    return InfiniteCarouselView(
+    return InfinitePageView(
       controller: controller,
-      initialIndex: fullMonth,
-      maxIndex: maxBound?.fullMonth,
-      minIndex: minBound?.fullMonth,
-      swipeFullLength: 120,
-      swipeTriggerLength: 30,
-      onIndexChanged: context.read<_FullMonthCubit>().setFullMonth,
+      onPageChanged: (index) =>
+          context.read<_FullMonthCubit>().setFullMonth(index),
       itemBuilder: (context, index) {
+        final isSelectedMonth = index == selectedDateCubit.state?.fullMonth;
         return SizedBox(
           width: cellWidth * 7,
           height: cellWidth * 6,
@@ -634,6 +646,7 @@ class MonthlyCalendar extends StatelessWidget {
 
     return GridView.builder(
       shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7, // 7 days in a week
       ),
@@ -897,7 +910,7 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
             child: Transform.translate(
               offset: Offset(_swipeOffset, 0),
               child: Opacity(
-                opacity: 1.0 - dragIndex,
+                opacity: (2.0 - dragIndex * 2).clamp(1, 2) - 1,
                 child: widget.itemBuilder(context, _currentIndex),
               ),
             ),
@@ -914,13 +927,151 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
                   0,
                 ),
                 child: Opacity(
-                  opacity: dragIndex,
+                  opacity: (dragIndex * 2).clamp(1, 2) - 1,
                   child: widget.itemBuilder(context, _nextIndex),
                 ),
               ),
             ),
         ],
       ),
+    );
+  }
+}
+
+class InfinitePageController extends PageController {
+  InfinitePageController({
+    required int initialIndex,
+    this.minIndex,
+    this.maxIndex,
+    super.keepPage = true,
+    super.viewportFraction = 1.0,
+    super.onAttach,
+    super.onDetach,
+  }) : super(
+          initialPage: _processInitialIndex(
+            initialIndex,
+            minIndex: minIndex,
+            maxIndex: maxIndex,
+          ),
+        ) {
+    if (maxIndex != null && initialIndex > maxIndex!) {
+      throw AssertionError(
+        'initialIndex ($initialIndex) must be lower or equal to '
+        'maxIndex ($maxIndex)',
+      );
+    }
+    if (minIndex != null && initialIndex < minIndex!) {
+      throw AssertionError(
+        'initialIndex ($initialIndex) must be higher or equal to '
+        'minIndex ($minIndex)',
+      );
+    }
+  }
+
+  final int? minIndex;
+  final int? maxIndex;
+
+  static int _processInitialIndex(
+    int index, {
+    required int? minIndex,
+    required int? maxIndex,
+  }) {
+    if (minIndex != null) {
+      // ignore: parameter_assignments
+      index -= minIndex;
+    } else if (maxIndex == null) {
+      // This is a hack for infinite scroll in the negative direction.
+
+      // ignore: parameter_assignments
+      index += 1000000;
+    } else {
+      // ignore: parameter_assignments
+      index = maxIndex - index;
+    }
+    return index;
+  }
+
+  static double _processIndex(
+    double index, {
+    required int? minIndex,
+    required int? maxIndex,
+  }) {
+    if (minIndex != null) {
+      // ignore: parameter_assignments
+      index += minIndex;
+    } else if (maxIndex == null) {
+      // This is a hack for infinite scroll in the negative direction.
+
+      // ignore: parameter_assignments
+      index -= 1000000;
+    } else {
+      // ignore: parameter_assignments
+      index = maxIndex - index;
+    }
+    return index;
+  }
+
+  int processIndex(int index) =>
+      _processIndex(index.toDouble(), minIndex: minIndex, maxIndex: maxIndex)
+          .toInt();
+
+  bool get _reverse => minIndex == null && maxIndex != null;
+  int? get _itemCount =>
+      maxIndex == null || minIndex == null ? null : maxIndex! - minIndex! + 1;
+
+  @override
+  void jumpToPage(int page) {
+    super.jumpToPage(
+      _processInitialIndex(page, minIndex: minIndex, maxIndex: maxIndex),
+    );
+  }
+
+  // TODO : animate from 4 to 7 without building 5 and 6
+  @override
+  Future<void> animateToPage(
+    int page, {
+    required Duration duration,
+    required Curve curve,
+  }) {
+    return super.animateToPage(
+      _processInitialIndex(page, minIndex: minIndex, maxIndex: maxIndex),
+      duration: duration,
+      curve: curve,
+    );
+  }
+
+  @override
+  double? get page {
+    final page = super.page;
+    if (page == null) return null;
+    return _processIndex(page, minIndex: minIndex, maxIndex: maxIndex);
+  }
+}
+
+class InfinitePageView extends StatelessWidget {
+  const InfinitePageView({
+    required this.controller,
+    required this.itemBuilder,
+    this.onPageChanged,
+    super.key,
+  });
+
+  final InfinitePageController controller;
+  final Widget? Function(BuildContext context, int index) itemBuilder;
+  final void Function(int index)? onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      // reverse only if
+      reverse: controller._reverse,
+      controller: controller,
+      itemBuilder: (context, index) =>
+          itemBuilder(context, controller.processIndex(index)),
+      onPageChanged: onPageChanged == null
+          ? null
+          : (index) => onPageChanged!(controller.processIndex(index)),
+      itemCount: controller._itemCount,
     );
   }
 }
