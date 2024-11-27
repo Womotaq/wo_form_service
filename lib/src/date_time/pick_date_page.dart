@@ -55,20 +55,22 @@ class _PickDatePageState extends State<PickDatePage> {
       initialDate = null;
     }
 
-    final initialDateSafe = initialDate ?? DateTime.now();
-    // if (minBound != null && initialDateSafe.isBefore(minBound)) {
-    //   initialDateSafe = minBound;
-    // }
-    // if (maxBound != null && initialDateSafe.isAfter(maxBound)) {
-    //   initialDateSafe = maxBound;
-    // }
+    DateTime? initialDateSafe = initialDate ?? DateTime.now();
+    if (minBound != null && initialDateSafe.isBefore(minBound)) {
+      initialDateSafe = null;
+    } else if (maxBound != null && initialDateSafe.isAfter(maxBound)) {
+      initialDateSafe = null;
+    }
+
+    final yearMonthCenter =
+        initialDateSafe ?? minBound ?? maxBound ?? DateTime.now();
 
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (context) => _YearDeltaCubit()),
         BlocProvider(
           create: (context) => _FullMonthCubit(
-            initialDateSafe.fullMonth,
+            initialDateSafe?.fullMonth ?? DateTime.now().fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
             yearDeltaCubit: context.read(),
@@ -94,22 +96,13 @@ class _PickDatePageState extends State<PickDatePage> {
               child: InfiniteListView(
                 scrollController: yearScrollController,
                 scrollDirection: Axis.horizontal,
-                initialIndex: initialDateSafe.year,
+                centerIndex: yearMonthCenter.year,
                 minIndex: minBound?.year,
                 maxIndex: maxBound?.year,
-                itemBuilder: (index, scrollController) {
-                  if (minBound != null && index < minBound.year) {
-                    return null;
-                  }
-                  if (maxBound != null && index > maxBound.year) {
-                    return null;
-                  }
-
-                  return _YearWidget(
-                    year: index,
-                    scrollController: scrollController,
-                  );
-                },
+                itemBuilder: (index, scrollController) => _YearWidget(
+                  year: index,
+                  scrollController: scrollController,
+                ),
               ),
             ),
             SizedBox(
@@ -120,43 +113,14 @@ class _PickDatePageState extends State<PickDatePage> {
                   return InfiniteListView(
                     scrollController: monthScrollController,
                     scrollDirection: Axis.horizontal,
-                    initialIndex: initialDateSafe.fullMonth,
-                    // minIndex: minBound?.fullMonth,
-                    // maxIndex: maxBound?.fullMonth,
-                    minIndex: minBound == null
-                        ? null
-                        : minBound.fullMonth - monthDelta,
-                    maxIndex: maxBound == null
-                        ? null
-                        : maxBound.fullMonth - monthDelta,
-                    itemBuilder: (index, scrollController) {
-                      // TODO
-                      index += monthDelta;
-
-                      // if (monthDelta == 0) {
-                      //   if (minBound != null &&
-                      //       index <
-                      //           minBound.fullMonth
-                      //               //
-                      //               -
-                      //               monthDelta) {
-                      //     return null;
-                      //   }
-                      //   if (maxBound != null &&
-                      //       index >
-                      //           maxBound.fullMonth
-                      //               //
-                      //               -
-                      //               monthDelta) {
-                      //     return null;
-                      //   }
-                      // }
-
-                      return _MonthWidget(
-                        fullMonth: index,
-                        scrollController: scrollController,
-                      );
-                    },
+                    centerIndex: (yearMonthCenter.fullMonth + monthDelta)
+                        ._clamp(minBound?.fullMonth, maxBound?.fullMonth),
+                    minIndex: minBound?.fullMonth,
+                    maxIndex: maxBound?.fullMonth,
+                    itemBuilder: (index, scrollController) => _MonthWidget(
+                      fullMonth: index,
+                      scrollController: scrollController,
+                    ),
                   );
                 },
               ),
@@ -256,14 +220,8 @@ class _FullMonthCubit extends Cubit<int> {
   final int? minBound;
   final int? maxBound;
 
-  int _clamp(int fullMonth) {
-    if (minBound != null && fullMonth < minBound!) return minBound!;
-    if (maxBound != null && fullMonth > maxBound!) return maxBound!;
-    return fullMonth;
-  }
-
   void setFullMonth(int fullMonth) {
-    final newFullMonth = _clamp(fullMonth);
+    final newFullMonth = fullMonth._clamp(minBound, maxBound);
     final scrollYear = newFullMonth.year != state.year;
 
     emit(newFullMonth);
@@ -285,7 +243,8 @@ class _FullMonthCubit extends Cubit<int> {
   }
 
   void setYear(int year) {
-    final fullMonth = _clamp(_FullMonth.build(year: year, month: state.month));
+    final fullMonth = _FullMonth.build(year: year, month: state.month)
+        ._clamp(minBound, maxBound);
     final yearDelta = fullMonth.year - state.year;
 
     emit(fullMonth);
@@ -300,12 +259,12 @@ class _FullMonthCubit extends Cubit<int> {
       yearDeltaCubit.increment(yearDelta);
 
       // Let the _MonthWidgets apply year delta before srolling to their index
-      // SchedulerBinding.instance.addPostFrameCallback((_) {
-      //   monthScrollController.scrollToIndex(
-      //     state,
-      //     preferPosition: AutoScrollPosition.middle,
-      //   );
-      // });
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        monthScrollController.scrollToIndex(
+          state,
+          preferPosition: AutoScrollPosition.middle,
+        );
+      });
     });
   }
 }
@@ -340,6 +299,12 @@ extension _FullMonth on int {
 
   int get year => yearAndMonth.$1;
   int get month => yearAndMonth.$2;
+
+  int _clamp(int? min, int? max) {
+    if (min != null && this < min) return min;
+    if (max != null && this > max) return max;
+    return this;
+  }
 }
 
 class InfiniteListView extends StatefulWidget {
@@ -347,7 +312,7 @@ class InfiniteListView extends StatefulWidget {
     required this.scrollController,
     required this.itemBuilder,
     this.scrollDirection = Axis.vertical,
-    this.initialIndex,
+    this.centerIndex = 0,
     this.minIndex,
     this.maxIndex,
     super.key,
@@ -359,7 +324,7 @@ class InfiniteListView extends StatefulWidget {
   final Axis scrollDirection;
 
   /// If provided, will auto-scroll to this index
-  final int? initialIndex;
+  final int centerIndex;
   final int? minIndex;
   final int? maxIndex;
 
@@ -371,19 +336,34 @@ class _InfiniteListViewState extends State<InfiniteListView> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialIndex != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.scrollController.scrollToIndex(
-          widget.initialIndex!,
-          preferPosition: AutoScrollPosition.middle,
-        ),
-      );
-    }
+
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => widget.scrollController.scrollToIndex(
+        widget.centerIndex,
+        preferPosition: AutoScrollPosition.middle,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.scrollDirection != Axis.horizontal) throw UnimplementedError();
+
+    final minIndex = widget.minIndex;
+    final maxIndex = widget.maxIndex;
+    final centerIndex = widget.centerIndex;
+    if (maxIndex != null && centerIndex > maxIndex) {
+      throw AssertionError(
+        'centerIndex ($centerIndex) must be lower or equal to '
+        'maxIndex ($maxIndex)',
+      );
+    }
+    if (minIndex != null && centerIndex < minIndex) {
+      throw AssertionError(
+        'centerIndex ($centerIndex) must be higher or equal to '
+        'minIndex ($minIndex)',
+      );
+    }
 
     final Key forwardListKey = UniqueKey();
     return Scrollable(
@@ -396,54 +376,38 @@ class _InfiniteListViewState extends State<InfiniteListView> {
           center: forwardListKey,
           slivers: [
             // reverse
-            if (widget.minIndex == null)
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  // (_, int index) =>  widget.itemBuilder(
-                  //   (widget.initialIndex ?? 0) - index - 1,
-                  //   widget.scrollController,
-                  // ),
-                  (_, int index) {
-                    final movedIndex = (widget.initialIndex ?? 0) - index - 1;
-                    final child = widget.itemBuilder(
-                      movedIndex,
-                      widget.scrollController,
-                    );
-                    if (child == null) {
-                      if (widget.minIndex != null &&
-                          movedIndex > widget.minIndex!) {
-                        // return Container(
-                        //   margin: const EdgeInsets.only(left: 2),
-                        //   width: 30,
-                        //   height: 30,
-                        //   color: Colors.red,
-                        // );
-                        return const SizedBox.shrink();
-                      }
-                    }
-                    return child;
-                  },
-                ),
-              ),
-            // forward
             SliverList(
-              key: forwardListKey,
               delegate: SliverChildBuilderDelegate(
+                childCount: minIndex == null ? null : centerIndex - minIndex,
                 (_, int index) {
-                  final movedIndex =
-                      (widget.minIndex ?? widget.initialIndex ?? 0) + index;
+                  final movedIndex = centerIndex - index - 1;
                   final child = widget.itemBuilder(
                     movedIndex,
                     widget.scrollController,
                   );
                   if (child == null) {
-                    if (widget.maxIndex != null &&
-                        movedIndex < widget.maxIndex!) {
-                      // return Container(
-                      //   width: 30,
-                      //   height: 30,
-                      //   color: Colors.blue,
-                      // );
+                    if (minIndex != null && movedIndex > minIndex) {
+                      return const SizedBox.shrink();
+                    }
+                  }
+                  return child;
+                },
+              ),
+            ),
+            // forward
+            SliverList(
+              key: forwardListKey,
+              delegate: SliverChildBuilderDelegate(
+                childCount:
+                    maxIndex == null ? null : maxIndex - centerIndex + 1,
+                (_, int index) {
+                  final movedIndex = centerIndex + index;
+                  final child = widget.itemBuilder(
+                    movedIndex,
+                    widget.scrollController,
+                  );
+                  if (child == null) {
+                    if (maxIndex != null && movedIndex < maxIndex) {
                       return const SizedBox.shrink();
                     }
                   }
@@ -535,12 +499,7 @@ class _SelectableIndex extends StatelessWidget {
         horizontal: 12,
         vertical: 8,
       ),
-      child: Column(
-        children: [
-          child,
-          Text(index.toString()),
-        ],
-      ),
+      child: child,
     );
 
     return AutoScrollTag(
@@ -733,11 +692,6 @@ class MonthlyCalendar extends StatelessWidget {
     for (var i = 1; i <= daysInMonth; i++) {
       days.add(i);
     }
-
-    // Add blank cells for days of the next month to fill the grid
-    // while (days.length % 7 != 0) {
-    //   days.add(null);
-    // }
 
     return days;
   }
