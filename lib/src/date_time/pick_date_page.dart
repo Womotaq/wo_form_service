@@ -499,7 +499,12 @@ class _SelectableIndex extends StatelessWidget {
         horizontal: 12,
         vertical: 8,
       ),
-      child: child,
+      child: Column(
+        children: [
+          child,
+          Text(index.toString()),
+        ],
+      ),
     );
 
     return AutoScrollTag(
@@ -563,32 +568,56 @@ class _DateWidget extends StatelessWidget {
     final minBound = selectedDateCubit.minBound;
     final maxBound = selectedDateCubit.maxBound;
 
-    return InfiniteListView(
-      scrollController: scrollController,
-      scrollDirection: Axis.horizontal,
-      itemBuilder: (index, scrollController) {
-        return SizedBox(
-          width: cellWidth * 7,
-          height: cellWidth * 6,
-          child: MonthlyCalendar(
-            year: fullMonth.year,
-            month: fullMonth.month,
-            selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
-            onSelect: selectedDateCubit.setDay,
-            minDay: minBound != null
-                ? minBound.fullMonth == fullMonth
-                    ? minBound.day
-                    : minBound.fullMonth > fullMonth
-                        ? 32
-                        : null
-                : null,
-            maxDay: maxBound != null
-                ? maxBound.fullMonth == fullMonth
-                    ? maxBound.day
-                    : maxBound.fullMonth < fullMonth
-                        ? -1
-                        : null
-                : null,
+    return InfiniteCarouselView(
+      initialIndex: fullMonth,
+      maxIndex: maxBound?.fullMonth,
+      minIndex: minBound?.fullMonth,
+      swipeFullLength: 120,
+      swipeTriggerLength: 60,
+      onIndexChanged: (index) {
+        // final movedFullMonth = index + fullMonth;
+
+        print(index);
+        context.read<_FullMonthCubit>().setFullMonth(index);
+      },
+      itemBuilder: (context, index) {
+        // final movedFullMonth = index + fullMonth;
+        // return SizedBox(
+        //   width: cellWidth * 7,
+        //   height: cellWidth * 6,
+        //   child: MonthlyCalendar(
+        //     year: index.year,
+        //     month: index.month,
+        //     selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
+        //     onSelect: selectedDateCubit.setDay,
+        //     minDay: minBound != null
+        //         ? minBound.fullMonth == index
+        //             ? minBound.day
+        //             : minBound.fullMonth > index
+        //                 ? 32
+        //                 : null
+        //         : null,
+        //     maxDay: maxBound != null
+        //         ? maxBound.fullMonth == index
+        //             ? maxBound.day
+        //             : maxBound.fullMonth < index
+        //                 ? -1
+        //                 : null
+        //         : null,
+        //   ),
+        // );
+
+        return Container(
+          width: 80,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.lightBlue,
+          ),
+          child: Center(
+            child: Text(
+              index.toString(),
+              style: Theme.of(context).textTheme.displayMedium,
+            ),
           ),
         );
       },
@@ -694,5 +723,161 @@ class MonthlyCalendar extends StatelessWidget {
     }
 
     return days;
+  }
+}
+
+class WoCarouselController {
+  const WoCarouselController();
+}
+
+class InfiniteCarouselView extends StatefulWidget {
+  const InfiniteCarouselView({
+    required this.itemBuilder,
+    this.onIndexChanged,
+    this.controller,
+    this.initialIndex,
+    this.minIndex,
+    this.maxIndex,
+    this.clipBehavior = Clip.none,
+    this.swipeTriggerLength = 32,
+    this.swipeFullLength = 96,
+    super.key,
+  });
+
+  final Widget Function(BuildContext context, int index) itemBuilder;
+  final void Function(int index)? onIndexChanged;
+  final WoCarouselController? controller;
+  final int? initialIndex;
+  final int? minIndex;
+  final int? maxIndex;
+  final Clip clipBehavior;
+  final int swipeTriggerLength;
+  final int swipeFullLength;
+
+  @override
+  State<InfiniteCarouselView> createState() => _InfiniteCarouselViewState();
+}
+
+class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
+  // The following index only changes when the drag ends.
+  // The ui's currentIndex can be accessed through onIndexChanged.
+  int _currentIndex = 0;
+  double _swipeOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _currentIndex = widget.initialIndex ?? 0;
+  }
+
+  void _handleSwipeUpdate(DragUpdateDetails details) {
+    final newSwipeOffset = _swipeOffset + details.delta.dx;
+
+    if (newSwipeOffset > 0) {
+      if (widget.minIndex != null && _currentIndex <= widget.minIndex!) {
+        return;
+      }
+    } else {
+      if (widget.maxIndex != null && _currentIndex >= widget.maxIndex!) {
+        return;
+      }
+    }
+
+    if (_swipeOffset.abs() > widget.swipeTriggerLength !=
+        newSwipeOffset.abs() > widget.swipeTriggerLength) {
+      _currentIndex = newSwipeOffset.abs() > widget.swipeTriggerLength
+          ? newSwipeOffset > 0
+              ? _currentIndex - 1
+              : _currentIndex + 1
+          : _swipeOffset > 0
+              ? _currentIndex + 1
+              : _currentIndex - 1;
+      widget.onIndexChanged?.call(_currentIndex);
+    }
+
+    setState(() => _swipeOffset = newSwipeOffset);
+  }
+
+  void _handleSwipeEnd(DragEndDetails details) {
+    if (_swipeOffset.abs() > widget.swipeTriggerLength) {
+      setState(() {
+        // Move to next or previous item
+        // _currentIndex += _swipeOffset > 0 ? -1 : 1;
+
+        // Reset the swipe offset
+        _swipeOffset = 0.0;
+      });
+    } else {
+      // Reset swipe offset if not enough movement
+      setState(() {
+        _swipeOffset = 0.0;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dragIndex =
+        (_swipeOffset.abs() / widget.swipeFullLength).clamp(0.0, 1.0);
+
+    return GestureDetector(
+      onHorizontalDragUpdate: _handleSwipeUpdate,
+      onHorizontalDragEnd: _handleSwipeEnd,
+      child: Stack(
+        clipBehavior: widget.clipBehavior,
+        children: [
+          // Current child with swipe transformation
+
+          Positioned.fill(
+            child: Transform.translate(
+              offset: Offset(_swipeOffset, 0),
+              child: Opacity(
+                opacity: 1.0 - dragIndex,
+                child: widget.itemBuilder(
+                  context,
+                  _swipeOffset.abs() > widget.swipeTriggerLength
+                      ? _swipeOffset < 0
+                          ? _currentIndex - 1
+                          : _currentIndex + 1
+                      : _currentIndex,
+                ),
+              ),
+            ),
+          ),
+          // Next child fades in during the swipe
+          if (_swipeOffset != 0)
+            Positioned.fill(
+              child: Transform.translate(
+                offset: Offset(
+                  (_swipeOffset < 0 ? -1 : 1) *
+                      (dragIndex * widget.swipeFullLength -
+                          widget.swipeFullLength),
+                  0,
+                ),
+                child: Opacity(
+                  opacity: dragIndex,
+                  child: widget.itemBuilder(
+                    context,
+                    _swipeOffset.abs() > widget.swipeTriggerLength
+                        ? _currentIndex
+                        : _swipeOffset < 0
+                            ? _currentIndex + 1
+                            : _currentIndex - 1,
+                  ),
+                ),
+              ),
+            ),
+          // Previous child fades in during the swipe
+          // if (_swipeOffset > 0)
+          //   Positioned.fill(
+          //     child: Opacity(
+          //       opacity: (_swipeOffset.abs() / 100.0).clamp(0.0, 1.0),
+          //       child: widget.itemBuilder(context, _currentIndex - 1),
+          //     ),
+          //   ),
+        ],
+      ),
+    );
   }
 }
