@@ -27,7 +27,7 @@ class PickDatePage extends StatefulWidget {
 class _PickDatePageState extends State<PickDatePage> {
   late final AutoScrollController yearScrollController;
   late final AutoScrollController monthScrollController;
-  late final AutoScrollController dayScrollController;
+  late final InfiniteCarouselController dayScrollController;
 
   @override
   void initState() {
@@ -35,7 +35,7 @@ class _PickDatePageState extends State<PickDatePage> {
 
     yearScrollController = AutoScrollController(axis: Axis.horizontal);
     monthScrollController = AutoScrollController(axis: Axis.horizontal);
-    dayScrollController = AutoScrollController(axis: Axis.horizontal);
+    dayScrollController = InfiniteCarouselController();
   }
 
   @override
@@ -73,6 +73,7 @@ class _PickDatePageState extends State<PickDatePage> {
             initialDateSafe?.fullMonth ?? DateTime.now().fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
+            dayCarouselController: dayScrollController,
             yearDeltaCubit: context.read(),
             minBound: minBound?.fullMonth,
             maxBound: maxBound?.fullMonth,
@@ -130,9 +131,7 @@ class _PickDatePageState extends State<PickDatePage> {
               child: SizedBox(
                 width: _DateWidget.cellWidth * 7,
                 height: _DateWidget.cellWidth * 6,
-                child: _DateWidget(
-                  scrollController: dayScrollController,
-                ),
+                child: _DateWidget(controller: dayScrollController),
               ),
             ),
             RepositoryProvider.value(
@@ -174,7 +173,6 @@ class _PickDatePageState extends State<PickDatePage> {
   void dispose() {
     yearScrollController.dispose();
     monthScrollController.dispose();
-    dayScrollController.dispose();
     super.dispose();
   }
 }
@@ -209,6 +207,7 @@ class _FullMonthCubit extends Cubit<int> {
     super.initialState, {
     required this.yearScrollController,
     required this.monthScrollController,
+    required this.dayCarouselController,
     required this.yearDeltaCubit,
     required this.minBound,
     required this.maxBound,
@@ -216,6 +215,7 @@ class _FullMonthCubit extends Cubit<int> {
 
   final AutoScrollController yearScrollController;
   final AutoScrollController monthScrollController;
+  final InfiniteCarouselController dayCarouselController;
   final _YearDeltaCubit yearDeltaCubit;
   final int? minBound;
   final int? maxBound;
@@ -225,6 +225,8 @@ class _FullMonthCubit extends Cubit<int> {
     final scrollYear = newFullMonth.year != state.year;
 
     emit(newFullMonth);
+
+    dayCarouselController.animateToIndex(fullMonth);
 
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -248,6 +250,8 @@ class _FullMonthCubit extends Cubit<int> {
     final yearDelta = fullMonth.year - state.year;
 
     emit(fullMonth);
+
+    dayCarouselController.animateToIndex(fullMonth);
 
     // Let the widgets update their sizes before srolling to their hitbox
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -499,12 +503,7 @@ class _SelectableIndex extends StatelessWidget {
         horizontal: 12,
         vertical: 8,
       ),
-      child: Column(
-        children: [
-          child,
-          Text(index.toString()),
-        ],
-      ),
+      child: child,
     );
 
     return AutoScrollTag(
@@ -553,9 +552,9 @@ class _SelectableIndex extends StatelessWidget {
 }
 
 class _DateWidget extends StatelessWidget {
-  const _DateWidget({required this.scrollController});
+  const _DateWidget({required this.controller});
 
-  final AutoScrollController scrollController;
+  final InfiniteCarouselController controller;
 
   static const cellWidth = 48;
 
@@ -569,55 +568,36 @@ class _DateWidget extends StatelessWidget {
     final maxBound = selectedDateCubit.maxBound;
 
     return InfiniteCarouselView(
+      controller: controller,
       initialIndex: fullMonth,
       maxIndex: maxBound?.fullMonth,
       minIndex: minBound?.fullMonth,
       swipeFullLength: 120,
-      swipeTriggerLength: 60,
-      onIndexChanged: (index) {
-        // final movedFullMonth = index + fullMonth;
-
-        print(index);
-        context.read<_FullMonthCubit>().setFullMonth(index);
-      },
+      swipeTriggerLength: 30,
+      onIndexChanged: context.read<_FullMonthCubit>().setFullMonth,
       itemBuilder: (context, index) {
-        // final movedFullMonth = index + fullMonth;
-        // return SizedBox(
-        //   width: cellWidth * 7,
-        //   height: cellWidth * 6,
-        //   child: MonthlyCalendar(
-        //     year: index.year,
-        //     month: index.month,
-        //     selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
-        //     onSelect: selectedDateCubit.setDay,
-        //     minDay: minBound != null
-        //         ? minBound.fullMonth == index
-        //             ? minBound.day
-        //             : minBound.fullMonth > index
-        //                 ? 32
-        //                 : null
-        //         : null,
-        //     maxDay: maxBound != null
-        //         ? maxBound.fullMonth == index
-        //             ? maxBound.day
-        //             : maxBound.fullMonth < index
-        //                 ? -1
-        //                 : null
-        //         : null,
-        //   ),
-        // );
-
-        return Container(
-          width: 80,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Colors.lightBlue,
-          ),
-          child: Center(
-            child: Text(
-              index.toString(),
-              style: Theme.of(context).textTheme.displayMedium,
-            ),
+        return SizedBox(
+          width: cellWidth * 7,
+          height: cellWidth * 6,
+          child: MonthlyCalendar(
+            year: index.year,
+            month: index.month,
+            selectedDay: isSelectedMonth ? selectedDateCubit.state?.day : null,
+            onSelect: selectedDateCubit.setDay,
+            minDay: minBound != null
+                ? minBound.fullMonth == index
+                    ? minBound.day
+                    : minBound.fullMonth > index
+                        ? 32
+                        : null
+                : null,
+            maxDay: maxBound != null
+                ? maxBound.fullMonth == index
+                    ? maxBound.day
+                    : maxBound.fullMonth < index
+                        ? -1
+                        : null
+                : null,
           ),
         );
       },
@@ -726,8 +706,11 @@ class MonthlyCalendar extends StatelessWidget {
   }
 }
 
-class WoCarouselController {
-  const WoCarouselController();
+class InfiniteCarouselController {
+  InfiniteCarouselController();
+
+  late void Function(int index) jumpToIndex;
+  late Future<void> Function(int index, {Duration duration}) animateToIndex;
 }
 
 class InfiniteCarouselView extends StatefulWidget {
@@ -746,7 +729,7 @@ class InfiniteCarouselView extends StatefulWidget {
 
   final Widget Function(BuildContext context, int index) itemBuilder;
   final void Function(int index)? onIndexChanged;
-  final WoCarouselController? controller;
+  final InfiniteCarouselController? controller;
   final int? initialIndex;
   final int? minIndex;
   final int? maxIndex;
@@ -758,23 +741,93 @@ class InfiniteCarouselView extends StatefulWidget {
   State<InfiniteCarouselView> createState() => _InfiniteCarouselViewState();
 }
 
-class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
+class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
+    with SingleTickerProviderStateMixin {
   // The following index only changes when the drag ends.
   // The ui's currentIndex can be accessed through onIndexChanged.
   int _currentIndex = 0;
   int _nextIndex = 0;
   double _swipeOffset = 0;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
 
     _currentIndex = widget.initialIndex ?? 0;
+
+    _animationController = AnimationController(vsync: this)
+      ..addListener(() => _onSwipeUpdate(_animation.value))
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _handleSwipeEnd(DragEndDetails());
+        }
+      });
+
+    if (widget.controller != null) {
+      widget.controller!
+        ..jumpToIndex = (index) {
+          setState(() {
+            _currentIndex = index;
+            _nextIndex = index;
+            _swipeOffset = 0;
+          });
+        }
+        ..animateToIndex = (index, {duration = Durations.medium1}) async {
+          await _animateToIndex(index, duration);
+        };
+    }
+  }
+
+  Future<void> _animateToIndex(int targetIndex, Duration duration) async {
+    if (targetIndex == _currentIndex) return;
+    if (targetIndex == _nextIndex && _swipeOffset != 0) return;
+    if ((widget.minIndex != null && targetIndex < widget.minIndex!) ||
+        (widget.maxIndex != null && targetIndex > widget.maxIndex!)) {
+      return; // Prevent moving out of bounds
+    }
+
+    _nextIndex = targetIndex;
+
+    final direction = targetIndex > _currentIndex ? -1 : 1;
+
+    _animation = Tween<double>(
+      begin: 0,
+      end: direction * widget.swipeFullLength.toDouble(),
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _animationController.duration = duration;
+
+    await _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   void _handleSwipeUpdate(DragUpdateDetails details) {
     final newSwipeOffset = _swipeOffset + details.delta.dx;
 
+    // Should be in setState, but since there is another one later,
+    // it doesn't matter
+    if (newSwipeOffset > 0) {
+      _nextIndex = _currentIndex - 1;
+    } else {
+      _nextIndex = _currentIndex + 1;
+    }
+
+    _onSwipeUpdate(newSwipeOffset);
+  }
+
+  void _onSwipeUpdate(double newSwipeOffset) {
     if (newSwipeOffset > 0) {
       if (widget.minIndex != null && _currentIndex <= widget.minIndex!) {
         return;
@@ -783,14 +836,6 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
       if (widget.maxIndex != null && _currentIndex >= widget.maxIndex!) {
         return;
       }
-    }
-
-    // Should be in setState, but since there is another one later,
-    // it doesn't matter
-    if (_swipeOffset > 0) {
-      _nextIndex = _currentIndex - 1;
-    } else {
-      _nextIndex = _currentIndex + 1;
     }
 
     if (_swipeOffset.abs() > widget.swipeTriggerLength !=
@@ -814,6 +859,9 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
 
       _swipeOffset = 0.0;
     });
+
+    // Reset the controller after the animation completes
+    _animationController.reset();
   }
 
   @override
