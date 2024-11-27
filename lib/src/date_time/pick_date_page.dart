@@ -633,8 +633,19 @@ class MonthlyCalendar extends StatelessWidget {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7, // 7 days in a week
       ),
-      itemCount: days.length,
+      itemCount: days.length + 7,
       itemBuilder: (context, index) {
+        if (index < 7) {
+          return Center(
+            child: Text(
+              DateFormat(DateFormat.ABBR_WEEKDAY)
+                  .format(DateTime(1, 1, index))[0],
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          );
+        }
+        index -= 7;
+
         final day = days[index];
         final selectable = day != null &&
             !((minDay != null && day < minDay!) ||
