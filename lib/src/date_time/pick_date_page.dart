@@ -120,22 +120,37 @@ class _PickDatePageState extends State<PickDatePage> {
                   return InfiniteListView(
                     scrollController: monthScrollController,
                     scrollDirection: Axis.horizontal,
-                    initialIndex: initialDateSafe.fullMonth + monthDelta,
-                    minIndex: minBound?.fullMonth,
-                    maxIndex: maxBound?.fullMonth,
-                    // minIndex: minBound == null
-                    //     ? null
-                    //     : minBound.fullMonth + monthDelta,
-                    // maxIndex: maxBound == null
-                    //     ? null
-                    //     : maxBound.fullMonth + monthDelta,
+                    initialIndex: initialDateSafe.fullMonth,
+                    // minIndex: minBound?.fullMonth,
+                    // maxIndex: maxBound?.fullMonth,
+                    minIndex: minBound == null
+                        ? null
+                        : minBound.fullMonth - monthDelta,
+                    maxIndex: maxBound == null
+                        ? null
+                        : maxBound.fullMonth - monthDelta,
                     itemBuilder: (index, scrollController) {
-                      if (minBound != null && index < minBound.fullMonth) {
-                        return null;
-                      }
-                      if (maxBound != null && index > maxBound.fullMonth) {
-                        return null;
-                      }
+                      // TODO
+                      index += monthDelta;
+
+                      // if (monthDelta == 0) {
+                      //   if (minBound != null &&
+                      //       index <
+                      //           minBound.fullMonth
+                      //               //
+                      //               -
+                      //               monthDelta) {
+                      //     return null;
+                      //   }
+                      //   if (maxBound != null &&
+                      //       index >
+                      //           maxBound.fullMonth
+                      //               //
+                      //               -
+                      //               monthDelta) {
+                      //     return null;
+                      //   }
+                      // }
 
                       return _MonthWidget(
                         fullMonth: index,
@@ -285,12 +300,12 @@ class _FullMonthCubit extends Cubit<int> {
       yearDeltaCubit.increment(yearDelta);
 
       // Let the _MonthWidgets apply year delta before srolling to their index
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        monthScrollController.scrollToIndex(
-          state,
-          preferPosition: AutoScrollPosition.middle,
-        );
-      });
+      // SchedulerBinding.instance.addPostFrameCallback((_) {
+      //   monthScrollController.scrollToIndex(
+      //     state,
+      //     preferPosition: AutoScrollPosition.middle,
+      //   );
+      // });
     });
   }
 }
@@ -342,6 +357,8 @@ class InfiniteListView extends StatefulWidget {
   final Widget? Function(int index, AutoScrollController scrollController)
       itemBuilder;
   final Axis scrollDirection;
+
+  /// If provided, will auto-scroll to this index
   final int? initialIndex;
   final int? minIndex;
   final int? maxIndex;
@@ -379,52 +396,55 @@ class _InfiniteListViewState extends State<InfiniteListView> {
           center: forwardListKey,
           slivers: [
             // reverse
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                // (_, int index) =>  widget.itemBuilder(
-                //   (widget.initialIndex ?? 0) - index - 1,
-                //   widget.scrollController,
-                // ),
-                (_, int index) {
-                  final movedIndex = (widget.initialIndex ?? 0) - index - 1;
-                  final child = widget.itemBuilder(
-                    movedIndex,
-                    widget.scrollController,
-                  );
-                  if (child == null) {
-                    if (widget.minIndex != null &&
-                        movedIndex > widget.minIndex!) {
-                      return Container(
-                        width: 30,
-                        height: 30,
-                        color: Colors.red,
-                      );
+            if (widget.minIndex == null)
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  // (_, int index) =>  widget.itemBuilder(
+                  //   (widget.initialIndex ?? 0) - index - 1,
+                  //   widget.scrollController,
+                  // ),
+                  (_, int index) {
+                    final movedIndex = (widget.initialIndex ?? 0) - index - 1;
+                    final child = widget.itemBuilder(
+                      movedIndex,
+                      widget.scrollController,
+                    );
+                    if (child == null) {
+                      if (widget.minIndex != null &&
+                          movedIndex > widget.minIndex!) {
+                        // return Container(
+                        //   margin: const EdgeInsets.only(left: 2),
+                        //   width: 30,
+                        //   height: 30,
+                        //   color: Colors.red,
+                        // );
+                        return const SizedBox.shrink();
+                      }
                     }
-                  }
-                  return child;
-                },
+                    return child;
+                  },
+                ),
               ),
-            ),
             // forward
             SliverList(
               key: forwardListKey,
               delegate: SliverChildBuilderDelegate(
                 (_, int index) {
-                  final movedIndex = (widget.initialIndex ?? 0) + index;
+                  final movedIndex =
+                      (widget.minIndex ?? widget.initialIndex ?? 0) + index;
                   final child = widget.itemBuilder(
                     movedIndex,
                     widget.scrollController,
                   );
                   if (child == null) {
-                    print(movedIndex);
                     if (widget.maxIndex != null &&
                         movedIndex < widget.maxIndex!) {
-                      return Container(
-                        width: 30,
-                        height: 30,
-                        color: Colors.blue,
-                      );
-                      // return const SizedBox.shrink();
+                      // return Container(
+                      //   width: 30,
+                      //   height: 30,
+                      //   color: Colors.blue,
+                      // );
+                      return const SizedBox.shrink();
                     }
                   }
                   return child;
@@ -515,7 +535,12 @@ class _SelectableIndex extends StatelessWidget {
         horizontal: 12,
         vertical: 8,
       ),
-      child: child,
+      child: Column(
+        children: [
+          child,
+          Text(index.toString()),
+        ],
+      ),
     );
 
     return AutoScrollTag(
