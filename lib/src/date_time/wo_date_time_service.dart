@@ -11,6 +11,7 @@ class DateTimeService {
     DateTime? maxBound,
     DateTime? minBound,
     DatePickerEntryMode? initialEntryMode,
+    String? dateFormat,
   }) {
     if (initialEntryMode == DatePickerEntryMode.input ||
         initialEntryMode == DatePickerEntryMode.inputOnly) {
@@ -31,6 +32,7 @@ class DateTimeService {
           initialDate: initialDate,
           maxBound: maxBound,
           minBound: minBound,
+          dateFormat: dateFormat,
         ),
       ),
     );

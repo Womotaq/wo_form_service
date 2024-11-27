@@ -12,6 +12,7 @@ class PickDatePage extends StatefulWidget {
     this.initialDate,
     this.maxBound,
     this.minBound,
+    this.dateFormat,
     super.key,
   });
 
@@ -19,6 +20,7 @@ class PickDatePage extends StatefulWidget {
   final DateTime? initialDate;
   final DateTime? maxBound;
   final DateTime? minBound;
+  final String? dateFormat;
 
   @override
   State<PickDatePage> createState() => _PickDatePageState();
@@ -148,12 +150,14 @@ class _PickDatePageState extends State<PickDatePage> {
 
                       return SubmitButton(
                         SubmitButtonData(
-                          text:
-                              // DateFormat.yMMMMEEEEd().format(date),
-                              MaterialLocalizations.of(context)
-                                  .keyboardKeySelect,
-                          onPressed: () => Navigator.of(context)
-                              .pop(context.read<_SelectedDateCubit>().state),
+                          text: DateFormat(widget.dateFormat ?? 'yMMMMd')
+                              // DateFormat('EEEE d MMMM y')
+                              .format(date),
+                          // MaterialLocalizations.of(context)
+                          //     .keyboardKeySelect,
+                          onPressed: () => Navigator.of(context).pop(
+                            context.read<_SelectedDateCubit>().state,
+                          ),
                           position: SubmitButtonPosition.body,
                           pageIndex: 0,
                         ),
@@ -760,7 +764,7 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
   int _nextIndex = 0;
   double _swipeOffset = 0;
   late AnimationController _animationController;
-  late Animation<double> _animation;
+  Animation<double>? _animation;
 
   @override
   void initState() {
@@ -769,7 +773,9 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
     _currentIndex = widget.initialIndex ?? 0;
 
     _animationController = AnimationController(vsync: this)
-      ..addListener(() => _onSwipeUpdate(_animation.value))
+      ..addListener(() {
+        if (_animation != null) _onSwipeUpdate(_animation!.value);
+      })
       ..addStatusListener((status) {
         if (status == AnimationStatus.completed) {
           _handleSwipeEnd(DragEndDetails());
