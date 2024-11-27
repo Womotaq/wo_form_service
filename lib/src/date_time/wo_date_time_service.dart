@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:wo_form_service/src/date_time/pick_date_page.dart';
+import 'package:wo_form_service/wo_form_service.dart';
 
 class DateTimeService {
   const DateTimeService();
@@ -11,6 +11,7 @@ class DateTimeService {
     DateTime? maxBound,
     DateTime? minBound,
     DatePickerEntryMode? initialEntryMode,
+    DatePickerMode? initialDatePickerMode,
     String? dateFormat,
   }) {
     if (initialEntryMode == DatePickerEntryMode.input ||
@@ -27,13 +28,16 @@ class DateTimeService {
     return Navigator.push(
       context,
       MaterialPageRoute<DateTime>(
-        builder: (_) => PickDatePage(
-          woFormStatusCubit: context.read(),
-          initialDate: initialDate,
-          maxBound: maxBound,
-          minBound: minBound,
-          dateFormat: dateFormat,
-        ),
+        builder: (_) => switch (initialDatePickerMode) {
+          DatePickerMode.year => PickDatePageWithYear(
+              woFormStatusCubit: context.read(),
+              initialDate: initialDate,
+              maxBound: maxBound,
+              minBound: minBound,
+              dateFormat: dateFormat,
+            ),
+          DatePickerMode.day || null => const PickDatePage(),
+        },
       ),
     );
   }
