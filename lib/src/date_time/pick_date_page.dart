@@ -762,6 +762,7 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
   // The following index only changes when the drag ends.
   // The ui's currentIndex can be accessed through onIndexChanged.
   int _currentIndex = 0;
+  int _nextIndex = 0;
   double _swipeOffset = 0;
 
   @override
@@ -784,36 +785,35 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
       }
     }
 
+    // Should be in setState, but since there is another one later,
+    // it doesn't matter
+    if (_swipeOffset > 0) {
+      _nextIndex = _currentIndex - 1;
+    } else {
+      _nextIndex = _currentIndex + 1;
+    }
+
     if (_swipeOffset.abs() > widget.swipeTriggerLength !=
         newSwipeOffset.abs() > widget.swipeTriggerLength) {
-      _currentIndex = newSwipeOffset.abs() > widget.swipeTriggerLength
-          ? newSwipeOffset > 0
-              ? _currentIndex - 1
-              : _currentIndex + 1
-          : _swipeOffset > 0
-              ? _currentIndex + 1
-              : _currentIndex - 1;
-      widget.onIndexChanged?.call(_currentIndex);
+      final currentUiIndex = newSwipeOffset.abs() > widget.swipeTriggerLength
+          ? _nextIndex
+          : _currentIndex;
+      widget.onIndexChanged?.call(currentUiIndex);
     }
 
     setState(() => _swipeOffset = newSwipeOffset);
   }
 
   void _handleSwipeEnd(DragEndDetails details) {
-    if (_swipeOffset.abs() > widget.swipeTriggerLength) {
-      setState(() {
-        // Move to next or previous item
-        // _currentIndex += _swipeOffset > 0 ? -1 : 1;
+    setState(() {
+      if (_swipeOffset.abs() > widget.swipeTriggerLength) {
+        _currentIndex = _nextIndex;
+      } else {
+        _nextIndex = _currentIndex;
+      }
 
-        // Reset the swipe offset
-        _swipeOffset = 0.0;
-      });
-    } else {
-      // Reset swipe offset if not enough movement
-      setState(() {
-        _swipeOffset = 0.0;
-      });
-    }
+      _swipeOffset = 0.0;
+    });
   }
 
   @override
@@ -828,23 +828,16 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
         clipBehavior: widget.clipBehavior,
         children: [
           // Current child with swipe transformation
-
           Positioned.fill(
             child: Transform.translate(
               offset: Offset(_swipeOffset, 0),
               child: Opacity(
                 opacity: 1.0 - dragIndex,
-                child: widget.itemBuilder(
-                  context,
-                  _swipeOffset.abs() > widget.swipeTriggerLength
-                      ? _swipeOffset < 0
-                          ? _currentIndex - 1
-                          : _currentIndex + 1
-                      : _currentIndex,
-                ),
+                child: widget.itemBuilder(context, _currentIndex),
               ),
             ),
           ),
+
           // Next child fades in during the swipe
           if (_swipeOffset != 0)
             Positioned.fill(
@@ -857,25 +850,10 @@ class _InfiniteCarouselViewState extends State<InfiniteCarouselView> {
                 ),
                 child: Opacity(
                   opacity: dragIndex,
-                  child: widget.itemBuilder(
-                    context,
-                    _swipeOffset.abs() > widget.swipeTriggerLength
-                        ? _currentIndex
-                        : _swipeOffset < 0
-                            ? _currentIndex + 1
-                            : _currentIndex - 1,
-                  ),
+                  child: widget.itemBuilder(context, _nextIndex),
                 ),
               ),
             ),
-          // Previous child fades in during the swipe
-          // if (_swipeOffset > 0)
-          //   Positioned.fill(
-          //     child: Opacity(
-          //       opacity: (_swipeOffset.abs() / 100.0).clamp(0.0, 1.0),
-          //       child: widget.itemBuilder(context, _currentIndex - 1),
-          //     ),
-          //   ),
         ],
       ),
     );
