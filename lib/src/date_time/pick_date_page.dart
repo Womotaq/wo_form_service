@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:wo_form/wo_form.dart';
 
 class PickDatePage extends StatefulWidget {
@@ -27,16 +24,40 @@ class PickDatePage extends StatefulWidget {
 }
 
 class _PickDatePageState extends State<PickDatePage> {
-  late final AutoScrollController yearScrollController;
-  late final AutoScrollController monthScrollController;
+  late final InfinitePageController yearScrollController;
+  late final InfinitePageController monthScrollController;
   late final InfinitePageController dayScrollController;
+  DateTime? initialDateSafe;
 
   @override
   void initState() {
     super.initState();
 
-    yearScrollController = AutoScrollController(axis: Axis.horizontal);
-    monthScrollController = AutoScrollController(axis: Axis.horizontal);
+    initialDateSafe = widget.initialDate ?? DateTime.now();
+    if (widget.minBound != null &&
+        initialDateSafe!.isBefore(widget.minBound!)) {
+      initialDateSafe = null;
+    } else if (widget.maxBound != null &&
+        initialDateSafe!.isAfter(widget.maxBound!)) {
+      initialDateSafe = null;
+    }
+
+    final yearMonthCenter =
+        initialDateSafe ?? widget.minBound ?? widget.maxBound ?? DateTime.now();
+
+    yearScrollController = InfinitePageController(
+      initialIndex: yearMonthCenter.year,
+      minIndex: widget.minBound?.year,
+      maxIndex: widget.maxBound?.year,
+      viewportFraction: .25,
+    );
+    monthScrollController = InfinitePageController(
+      initialIndex: yearMonthCenter.fullMonth
+          ._clamp(widget.minBound?.fullMonth, widget.maxBound?.fullMonth),
+      minIndex: widget.minBound?.fullMonth,
+      maxIndex: widget.maxBound?.fullMonth,
+      viewportFraction: .32,
+    );
     dayScrollController = InfinitePageController(
       // initialIndex: 3,
       // minIndex: -1,
@@ -64,26 +85,14 @@ class _PickDatePageState extends State<PickDatePage> {
       initialDate = null;
     }
 
-    DateTime? initialDateSafe = initialDate ?? DateTime.now();
-    if (minBound != null && initialDateSafe.isBefore(minBound)) {
-      initialDateSafe = null;
-    } else if (maxBound != null && initialDateSafe.isAfter(maxBound)) {
-      initialDateSafe = null;
-    }
-
-    final yearMonthCenter =
-        initialDateSafe ?? minBound ?? maxBound ?? DateTime.now();
-
     return MultiBlocProvider(
       providers: [
-        BlocProvider(create: (context) => _YearDeltaCubit()),
         BlocProvider(
           create: (context) => _FullMonthCubit(
             initialDateSafe?.fullMonth ?? DateTime.now().fullMonth,
             yearScrollController: yearScrollController,
             monthScrollController: monthScrollController,
             dayPageController: dayScrollController,
-            yearDeltaCubit: context.read(),
             minBound: minBound?.fullMonth,
             maxBound: maxBound?.fullMonth,
           ),
@@ -103,36 +112,18 @@ class _PickDatePageState extends State<PickDatePage> {
           children: [
             SizedBox(
               height: 64,
-              child: InfiniteListView(
-                scrollController: yearScrollController,
-                scrollDirection: Axis.horizontal,
-                centerIndex: yearMonthCenter.year,
-                minIndex: minBound?.year,
-                maxIndex: maxBound?.year,
-                itemBuilder: (index, scrollController) => _YearWidget(
-                  year: index,
-                  scrollController: scrollController,
-                ),
+              child: InfinitePageView(
+                controller: yearScrollController,
+                itemBuilder: (context, index) => _YearWidget(year: index),
+                pageSnapping: false,
               ),
             ),
             SizedBox(
               height: 64,
-              child: BlocSelector<_YearDeltaCubit, int, int>(
-                selector: (yearDelta) => yearDelta * 12,
-                builder: (context, monthDelta) {
-                  return InfiniteListView(
-                    scrollController: monthScrollController,
-                    scrollDirection: Axis.horizontal,
-                    centerIndex: (yearMonthCenter.fullMonth + monthDelta)
-                        ._clamp(minBound?.fullMonth, maxBound?.fullMonth),
-                    minIndex: minBound?.fullMonth,
-                    maxIndex: maxBound?.fullMonth,
-                    itemBuilder: (index, scrollController) => _MonthWidget(
-                      fullMonth: index,
-                      scrollController: scrollController,
-                    ),
-                  );
-                },
+              child: InfinitePageView(
+                controller: monthScrollController,
+                itemBuilder: (context, index) => _MonthWidget(fullMonth: index),
+                pageSnapping: false,
               ),
             ),
             const SizedBox(height: 16),
@@ -219,53 +210,50 @@ class _FullMonthCubit extends Cubit<int> {
     required this.yearScrollController,
     required this.monthScrollController,
     required this.dayPageController,
-    required this.yearDeltaCubit,
     required this.minBound,
     required this.maxBound,
   });
 
-  final AutoScrollController yearScrollController;
-  final AutoScrollController monthScrollController;
+  final InfinitePageController yearScrollController;
+  final InfinitePageController monthScrollController;
   final InfinitePageController dayPageController;
-  final _YearDeltaCubit yearDeltaCubit;
   final int? minBound;
   final int? maxBound;
 
-  void setFullMonth(int fullMonth) {
+  bool _locked = false;
+
+  Future<void> setFullMonth(int fullMonth, {bool fromMonths = false}) async {
+    if (_locked) return;
+
     final newFullMonth = fullMonth._clamp(minBound, maxBound);
     final scrollYear = newFullMonth.year != state.year;
 
     if (newFullMonth == state) return;
+    _locked = true;
     emit(newFullMonth);
 
-    dayPageController.animateToPage(
-      fullMonth,
+    if (fromMonths) dayPageController.jumpToPage(fullMonth);
+
+    if (scrollYear) yearScrollController.jumpToPage(state.year);
+
+    // Let the widgets update their sizes before srolling to their hitbox
+    await monthScrollController.animateToPage(
+      state,
       duration: Durations.medium1,
       curve: Curves.easeInOut,
     );
 
-    // Let the widgets update their sizes before srolling to their hitbox
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      monthScrollController.scrollToIndex(
-        state,
-        preferPosition: AutoScrollPosition.middle,
-      );
-
-      if (scrollYear) {
-        yearScrollController.scrollToIndex(
-          state.year,
-          preferPosition: AutoScrollPosition.middle,
-        );
-      }
-    });
+    _locked = false;
   }
 
-  void setYear(int year) {
+  Future<void> setYear(int year) async {
+    if (_locked) return;
+
     final fullMonth = _FullMonth.build(year: year, month: state.month)
         ._clamp(minBound, maxBound);
-    final yearDelta = fullMonth.year - state.year;
 
     if (fullMonth == state) return;
+    _locked = true;
     emit(fullMonth);
 
     dayPageController.jumpToPage(
@@ -274,32 +262,20 @@ class _FullMonthCubit extends Cubit<int> {
       // curve: Curves.easeInOut,
     );
 
+    // Let the _MonthWidgets apply year delta before srolling to their index
+    monthScrollController.jumpToPage(
+      state,
+    );
+
     // Let the widgets update their sizes before srolling to their hitbox
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      yearScrollController.scrollToIndex(
-        state.year,
-        preferPosition: AutoScrollPosition.middle,
-      );
+    await yearScrollController.animateToPage(
+      state.year,
+      duration: Durations.medium1,
+      curve: Curves.easeInOut,
+    );
 
-      yearDeltaCubit.increment(yearDelta);
-
-      // Let the _MonthWidgets apply year delta before srolling to their index
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        monthScrollController.scrollToIndex(
-          state,
-          preferPosition: AutoScrollPosition.middle,
-        );
-      });
-    });
+    _locked = false;
   }
-}
-
-/// This cubit stores a very special value that allows the _MonthWidget to stay
-/// coherent when changing the year
-class _YearDeltaCubit extends Cubit<int> {
-  _YearDeltaCubit() : super(0);
-
-  void increment(int delta) => emit(state + delta);
 }
 
 extension on DateTime {
@@ -332,129 +308,10 @@ extension _FullMonth on int {
   }
 }
 
-class InfiniteListView extends StatefulWidget {
-  const InfiniteListView({
-    required this.scrollController,
-    required this.itemBuilder,
-    this.scrollDirection = Axis.vertical,
-    this.centerIndex = 0,
-    this.minIndex,
-    this.maxIndex,
-    super.key,
-  });
-
-  final AutoScrollController scrollController;
-  final Widget? Function(int index, AutoScrollController scrollController)
-      itemBuilder;
-  final Axis scrollDirection;
-
-  /// If provided, will auto-scroll to this index
-  final int centerIndex;
-  final int? minIndex;
-  final int? maxIndex;
-
-  @override
-  State<InfiniteListView> createState() => _InfiniteListViewState();
-}
-
-class _InfiniteListViewState extends State<InfiniteListView> {
-  @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => widget.scrollController.scrollToIndex(
-        widget.centerIndex,
-        preferPosition: AutoScrollPosition.middle,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.scrollDirection != Axis.horizontal) throw UnimplementedError();
-
-    final minIndex = widget.minIndex;
-    final maxIndex = widget.maxIndex;
-    final centerIndex = widget.centerIndex;
-    if (maxIndex != null && centerIndex > maxIndex) {
-      throw AssertionError(
-        'centerIndex ($centerIndex) must be lower or equal to '
-        'maxIndex ($maxIndex)',
-      );
-    }
-    if (minIndex != null && centerIndex < minIndex) {
-      throw AssertionError(
-        'centerIndex ($centerIndex) must be higher or equal to '
-        'minIndex ($minIndex)',
-      );
-    }
-
-    final Key forwardListKey = UniqueKey();
-    return Scrollable(
-      axisDirection: AxisDirection.right,
-      controller: widget.scrollController,
-      viewportBuilder: (BuildContext context, ViewportOffset offset) {
-        return Viewport(
-          axisDirection: AxisDirection.right,
-          offset: offset,
-          center: forwardListKey,
-          slivers: [
-            // reverse
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                childCount: minIndex == null ? null : centerIndex - minIndex,
-                (_, int index) {
-                  final movedIndex = centerIndex - index - 1;
-                  final child = widget.itemBuilder(
-                    movedIndex,
-                    widget.scrollController,
-                  );
-                  if (child == null) {
-                    if (minIndex != null && movedIndex > minIndex) {
-                      return const SizedBox.shrink();
-                    }
-                  }
-                  return child;
-                },
-              ),
-            ),
-            // forward
-            SliverList(
-              key: forwardListKey,
-              delegate: SliverChildBuilderDelegate(
-                childCount:
-                    maxIndex == null ? null : maxIndex - centerIndex + 1,
-                (_, int index) {
-                  final movedIndex = centerIndex + index;
-                  final child = widget.itemBuilder(
-                    movedIndex,
-                    widget.scrollController,
-                  );
-                  if (child == null) {
-                    if (maxIndex != null && movedIndex < maxIndex) {
-                      return const SizedBox.shrink();
-                    }
-                  }
-                  return child;
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
 class _YearWidget extends StatelessWidget {
-  const _YearWidget({
-    required this.year,
-    required this.scrollController,
-  });
+  const _YearWidget({required this.year});
 
   final int year;
-  final AutoScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -464,7 +321,6 @@ class _YearWidget extends StatelessWidget {
         return _SelectableIndex(
           index: year,
           selectedIndex: selectedYear,
-          scrollController: scrollController,
           child: Text(year.toString()),
           onSelect: () => context.read<_FullMonthCubit>().setYear(year),
         );
@@ -474,13 +330,9 @@ class _YearWidget extends StatelessWidget {
 }
 
 class _MonthWidget extends StatelessWidget {
-  const _MonthWidget({
-    required this.fullMonth,
-    required this.scrollController,
-  });
+  const _MonthWidget({required this.fullMonth});
 
   final int fullMonth;
-  final AutoScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -490,10 +342,10 @@ class _MonthWidget extends StatelessWidget {
         return _SelectableIndex(
           index: fullMonth,
           selectedIndex: currentFullMonth,
-          scrollController: scrollController,
           child: Text(DateFormat.MMMM().format(DateTime(1, month))),
-          onSelect: () =>
-              context.read<_FullMonthCubit>().setFullMonth(fullMonth),
+          onSelect: () => context
+              .read<_FullMonthCubit>()
+              .setFullMonth(fullMonth, fromMonths: true),
         );
       },
     );
@@ -504,14 +356,12 @@ class _SelectableIndex extends StatelessWidget {
   const _SelectableIndex({
     required this.index,
     required this.selectedIndex,
-    required this.scrollController,
     required this.child,
     required this.onSelect,
   });
 
   final int index;
   final int selectedIndex;
-  final AutoScrollController scrollController;
   final Widget child;
   final VoidCallback onSelect;
 
@@ -527,45 +377,26 @@ class _SelectableIndex extends StatelessWidget {
       child: child,
     );
 
-    return AutoScrollTag(
-      key: ValueKey(index),
-      controller: scrollController,
-      index: index,
-      child: TweenAnimationBuilder<Color?>(
-        duration: Durations.medium1,
-        tween: ColorTween(
-          begin: index == selectedIndex
-              ? theme.disabledColor
-              : theme.colorScheme.onPrimary,
-          end: index == selectedIndex
-              ? theme.colorScheme.onPrimary
-              : theme.disabledColor,
-        ),
-        builder: (context, color, child) => DefaultTextStyle(
-          style: index == selectedIndex
-              ? theme.textTheme.bodyLarge!.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimary,
+    return DefaultTextStyle(
+      style: index == selectedIndex
+          ? theme.textTheme.bodyLarge!.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onPrimary,
+            )
+          : TextStyle(color: theme.disabledColor),
+      child: Center(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onSelect,
+          child: index == selectedIndex
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: yearWidget,
                 )
-              : TextStyle(color: theme.disabledColor),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: onSelect,
-                child: index == selectedIndex
-                    ? Container(
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: yearWidget,
-                      )
-                    : yearWidget,
-              ),
-            ),
-          ),
+              : yearWidget,
         ),
       ),
     );
@@ -582,7 +413,6 @@ class _DateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedDateCubit = context.watch<_SelectedDateCubit>();
-
     final minBound = selectedDateCubit.minBound;
     final maxBound = selectedDateCubit.maxBound;
 
@@ -734,210 +564,6 @@ class MonthlyCalendar extends StatelessWidget {
   }
 }
 
-class InfiniteCarouselController {
-  InfiniteCarouselController();
-
-  late void Function(int index) jumpToIndex;
-  late Future<void> Function(int index, {Duration duration}) animateToIndex;
-}
-
-class InfiniteCarouselView extends StatefulWidget {
-  const InfiniteCarouselView({
-    required this.itemBuilder,
-    this.onIndexChanged,
-    this.controller,
-    this.initialIndex,
-    this.minIndex,
-    this.maxIndex,
-    this.clipBehavior = Clip.none,
-    this.swipeTriggerLength = 32,
-    this.swipeFullLength = 96,
-    super.key,
-  });
-
-  final Widget Function(BuildContext context, int index) itemBuilder;
-  final void Function(int index)? onIndexChanged;
-  final InfiniteCarouselController? controller;
-  final int? initialIndex;
-  final int? minIndex;
-  final int? maxIndex;
-  final Clip clipBehavior;
-  final int swipeTriggerLength;
-  final int swipeFullLength;
-
-  @override
-  State<InfiniteCarouselView> createState() => _InfiniteCarouselViewState();
-}
-
-class _InfiniteCarouselViewState extends State<InfiniteCarouselView>
-    with SingleTickerProviderStateMixin {
-  // The following index only changes when the drag ends.
-  // The ui's currentIndex can be accessed through onIndexChanged.
-  int _currentIndex = 0;
-  int _nextIndex = 0;
-  double _swipeOffset = 0;
-  late AnimationController _animationController;
-  Animation<double>? _animation;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _currentIndex = widget.initialIndex ?? 0;
-
-    _animationController = AnimationController(vsync: this)
-      ..addListener(() {
-        if (_animation != null) _onSwipeUpdate(_animation!.value);
-      })
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _handleSwipeEnd(DragEndDetails());
-        }
-      });
-
-    if (widget.controller != null) {
-      widget.controller!
-        ..jumpToIndex = (index) {
-          setState(() {
-            _currentIndex = index;
-            _nextIndex = index;
-            _swipeOffset = 0;
-          });
-        }
-        ..animateToIndex = (index, {duration = Durations.medium1}) async {
-          await _animateToIndex(index, duration);
-        };
-    }
-  }
-
-  Future<void> _animateToIndex(int targetIndex, Duration duration) async {
-    if (targetIndex == _currentIndex) return;
-    if (targetIndex == _nextIndex && _swipeOffset != 0) return;
-    if ((widget.minIndex != null && targetIndex < widget.minIndex!) ||
-        (widget.maxIndex != null && targetIndex > widget.maxIndex!)) {
-      return; // Prevent moving out of bounds
-    }
-
-    _nextIndex = targetIndex;
-
-    final direction = targetIndex > _currentIndex ? -1 : 1;
-
-    _animation = Tween<double>(
-      begin: 0,
-      end: direction * widget.swipeFullLength.toDouble(),
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _animationController.duration = duration;
-
-    await _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  void _handleSwipeUpdate(DragUpdateDetails details) {
-    final newSwipeOffset = _swipeOffset + details.delta.dx;
-
-    // Should be in setState, but since there is another one later,
-    // it doesn't matter
-    if (newSwipeOffset > 0) {
-      _nextIndex = _currentIndex - 1;
-    } else {
-      _nextIndex = _currentIndex + 1;
-    }
-
-    _onSwipeUpdate(newSwipeOffset);
-  }
-
-  void _onSwipeUpdate(double newSwipeOffset) {
-    if (newSwipeOffset > 0) {
-      if (widget.minIndex != null && _currentIndex <= widget.minIndex!) {
-        return;
-      }
-    } else {
-      if (widget.maxIndex != null && _currentIndex >= widget.maxIndex!) {
-        return;
-      }
-    }
-
-    if (_swipeOffset.abs() > widget.swipeTriggerLength !=
-        newSwipeOffset.abs() > widget.swipeTriggerLength) {
-      final currentUiIndex = newSwipeOffset.abs() > widget.swipeTriggerLength
-          ? _nextIndex
-          : _currentIndex;
-      widget.onIndexChanged?.call(currentUiIndex);
-    }
-
-    setState(() => _swipeOffset = newSwipeOffset);
-  }
-
-  void _handleSwipeEnd(DragEndDetails details) {
-    setState(() {
-      if (_swipeOffset.abs() > widget.swipeTriggerLength) {
-        _currentIndex = _nextIndex;
-      } else {
-        _nextIndex = _currentIndex;
-      }
-
-      _swipeOffset = 0.0;
-    });
-
-    // Reset the controller after the animation completes
-    _animationController.reset();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dragIndex =
-        (_swipeOffset.abs() / widget.swipeFullLength).clamp(0.0, 1.0);
-
-    return GestureDetector(
-      onHorizontalDragUpdate: _handleSwipeUpdate,
-      onHorizontalDragEnd: _handleSwipeEnd,
-      child: Stack(
-        clipBehavior: widget.clipBehavior,
-        children: [
-          // Current child with swipe transformation
-          Positioned.fill(
-            child: Transform.translate(
-              offset: Offset(_swipeOffset, 0),
-              child: Opacity(
-                opacity: (2.0 - dragIndex * 2).clamp(1, 2) - 1,
-                child: widget.itemBuilder(context, _currentIndex),
-              ),
-            ),
-          ),
-
-          // Next child fades in during the swipe
-          if (_swipeOffset != 0)
-            Positioned.fill(
-              child: Transform.translate(
-                offset: Offset(
-                  (_swipeOffset < 0 ? -1 : 1) *
-                      (dragIndex * widget.swipeFullLength -
-                          widget.swipeFullLength),
-                  0,
-                ),
-                child: Opacity(
-                  opacity: (dragIndex * 2).clamp(1, 2) - 1,
-                  child: widget.itemBuilder(context, _nextIndex),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class InfinitePageController extends PageController {
   InfinitePageController({
     required int initialIndex,
@@ -1026,7 +652,6 @@ class InfinitePageController extends PageController {
     );
   }
 
-  // TODO : animate from 4 to 7 without building 5 and 6
   @override
   Future<void> animateToPage(
     int page, {
@@ -1053,25 +678,27 @@ class InfinitePageView extends StatelessWidget {
     required this.controller,
     required this.itemBuilder,
     this.onPageChanged,
+    this.pageSnapping = true,
     super.key,
   });
 
   final InfinitePageController controller;
   final Widget? Function(BuildContext context, int index) itemBuilder;
   final void Function(int index)? onPageChanged;
+  final bool pageSnapping;
 
   @override
   Widget build(BuildContext context) {
     return PageView.builder(
-      // reverse only if
-      reverse: controller._reverse,
       controller: controller,
+      pageSnapping: pageSnapping,
+      reverse: controller._reverse,
+      itemCount: controller._itemCount,
       itemBuilder: (context, index) =>
           itemBuilder(context, controller.processIndex(index)),
       onPageChanged: onPageChanged == null
           ? null
           : (index) => onPageChanged!(controller.processIndex(index)),
-      itemCount: controller._itemCount,
     );
   }
 }
