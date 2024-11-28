@@ -22,6 +22,15 @@ class PickDatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var initialDate = this.initialDate;
+    if (initialDate != null && initialDate.isBefore(minDate)) {
+      initialDate = null;
+    } else if (initialDate != null &&
+        maxDate != null &&
+        initialDate.isAfter(maxDate!)) {
+      initialDate = null;
+    }
+
     return BlocProvider(
       create: (context) => _SelectedDateCubit(
         initialDate,
@@ -44,7 +53,7 @@ class PickDatePage extends StatelessWidget {
             var initialScrollOffset = 0.0;
             if (initialDate != null) {
               for (var i = 0;
-                  i < initialDate!.fullMonth - minDate.fullMonth;
+                  i < initialDate.fullMonth - minDate.fullMonth;
                   i++) {
                 final fullMonth = i + minDate.fullMonth;
                 initialScrollOffset +=
