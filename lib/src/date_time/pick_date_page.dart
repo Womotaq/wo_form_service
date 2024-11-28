@@ -70,7 +70,9 @@ class PickDatePage extends StatelessWidget {
                         SizedBox(
                           height: 32,
                           child: Text(
-                            DateFormat.yMMMM().format(DateTime(0, fullMonth)),
+                            DateFormat.yMMMM()
+                                .format(DateTime(0, fullMonth))
+                                .capitalized(),
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyLarge
@@ -164,4 +166,9 @@ class _SelectedDateCubit extends Cubit<DateTime?> {
 
 extension on DateTime {
   int get fullMonth => year * 12 + month;
+}
+
+extension on String {
+  String capitalized() =>
+      '${this[0].toUpperCase()}${substring(1).toLowerCase()}';
 }
