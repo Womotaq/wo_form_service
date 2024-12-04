@@ -25,6 +25,8 @@ class DateTimeService {
       throw AssertionError('minBound must be before maxBound');
     }
 
+    FocusScope.of(context).unfocus();
+
     return Navigator.push(
       context,
       MaterialPageRoute<DateTime>(

@@ -367,6 +367,8 @@ class AddMediaButon extends StatelessWidget {
         onTap: onChanged == null
             ? null
             : () async {
+                FocusScope.of(context).unfocus();
+
                 final mediaService = context.read<WoMediaService>();
                 var newMedias = await mediaService.importMedias(
                   limit: limit,
