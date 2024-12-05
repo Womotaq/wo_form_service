@@ -37,7 +37,7 @@ abstract class WoMediaService extends MediaService {
     imageMaxHeight: 512,
     imageMaxWidth: 512,
     preferFrontCamera: true,
-    types: {MediaType.image},
+    type: MediaType.image,
     methods: [
       MediaImportMethodPickMedias(
         source: MediaPickSource.gallery,
@@ -49,7 +49,7 @@ abstract class WoMediaService extends MediaService {
     ],
   );
   static const imageImportSettings = MediaImportSettings(
-    types: {MediaType.image},
+    type: MediaType.image,
     methods: [
       MediaImportMethodPickMedias(
         source: MediaPickSource.gallery,
@@ -187,12 +187,10 @@ abstract class WoMediaService extends MediaService {
         return media == null ? [] : [media];
       case MediaImportMethodPickMedias(
           source: final source,
-          types: final types,
+          type: final type,
         ):
-        final includeImages =
-            (types ?? importSettings.types).contains(MediaType.image);
-        final includeVideos =
-            (types ?? importSettings.types).contains(MediaType.video);
+        final includeImages = (type ?? importSettings.type).includeImages;
+        final includeVideos = (type ?? importSettings.type).includeVideos;
 
         if (!includeImages && !includeVideos) {
           throw AssertionError('No type is specified');
