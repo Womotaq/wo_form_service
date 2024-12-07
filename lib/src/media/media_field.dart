@@ -131,21 +131,40 @@ class MediaField extends StatelessWidget {
                     ),
                     Positioned(
                       right: 0,
-                      child: Column(
-                        children: [
-                          IconButton(
-                            onPressed: onChanged == null
-                                ? null
-                                : () => onChanged.call([]),
-                            icon: const Icon(Icons.close),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: onChanged == null
-                                ? null
-                                : () => edit(context, media),
-                          ),
-                        ],
+                      child: Container(
+                        height: fieldHeight.toDouble(),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerLowest
+                            .withAlpha(160),
+                        child: Column(
+                          children: [
+                            IconButton(
+                              // style: IconButton.styleFrom(
+                              //   backgroundColor: Theme.of(context)
+                              //       .colorScheme
+                              //       .surfaceContainerLowest
+                              //       .withAlpha(160),
+                              // ),
+                              onPressed: onChanged == null
+                                  ? null
+                                  : () => onChanged.call([]),
+                              icon: const Icon(Icons.close),
+                            ),
+                            IconButton(
+                              // style: IconButton.styleFrom(
+                              //   backgroundColor: Theme.of(context)
+                              //       .colorScheme
+                              //       .surfaceContainerLowest
+                              //       .withAlpha(160),
+                              // ),
+                              icon: const Icon(Icons.edit),
+                              onPressed: onChanged == null
+                                  ? null
+                                  : () => edit(context, media),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
