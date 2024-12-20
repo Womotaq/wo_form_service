@@ -58,10 +58,7 @@ class _PickDatePageWithYearState extends State<PickDatePageWithYear> {
       viewportFraction: .32,
     );
     dayScrollController = InfinitePageController(
-      // initialIndex: 3,
-      // minIndex: -1,
-      // maxIndex: 5,
-      initialIndex: widget.initialDate?.fullMonth ?? 0,
+      initialIndex: yearMonthCenter.fullMonth,
       maxIndex: widget.maxDate?.fullMonth,
       minIndex: widget.minDate?.fullMonth,
     );
