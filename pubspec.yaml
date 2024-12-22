@@ -1,7 +1,9 @@
 name: wo_form_service
-description: "A new Flutter package project."
+description: "An implementation of services from wo_form."
 version: 0.0.1
-homepage:
+repository: https://github.com/BudgetChess/wo_form_service
+funding:
+  - https://ko-fi.com/chresyr
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
