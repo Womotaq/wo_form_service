@@ -570,7 +570,7 @@ class DaysOfWeek extends StatelessWidget {
         return Center(
           child: Text(
             DateFormat(DateFormat.ABBR_WEEKDAY)
-                .format(DateTime(1, 1, index))[0]
+                .format(DateTime(1, 1, 1 + index))[0]
                 .toUpperCase(),
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
