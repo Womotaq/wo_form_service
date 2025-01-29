@@ -63,6 +63,11 @@ abstract class WoMediaService extends MediaService {
 
   /// Called when using MediaImportMethodUrl
   Future<MediaUrl?> enterMediaUrl();
+  Future<List<Media>> customImport({
+    required String methodId,
+    required int? limit,
+    required MediaImportSettings importSettings,
+  });
   BuildContext getAppContext();
   (String title, String cancel, String save) getCropLocalizations(
     BuildContext context,
@@ -182,6 +187,12 @@ abstract class WoMediaService extends MediaService {
     required MediaImportMethod importMethod,
   }) async {
     switch (importMethod) {
+      case MediaImportMethodCustom(:final id):
+        return customImport(
+          methodId: id,
+          limit: limit,
+          importSettings: importSettings,
+        );
       case MediaImportMethodUrl():
         final media = await enterMediaUrl();
         return media == null ? [] : [media];
