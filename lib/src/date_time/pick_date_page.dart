@@ -14,7 +14,7 @@ class PickDatePage extends StatelessWidget {
     super.key,
   });
 
-  final WoFormStatusCubit woFormStatusCubit;
+  final WoFormStatusCubit? woFormStatusCubit;
   final DateTime minDate;
   final DateTime? maxDate;
   final DateTime? initialDate;
