@@ -1,27 +1,51 @@
 # wo_form_service
 
-An implementation of the services described in wo_form
+An implementation of services from wo_form.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Implements MediaInput with MediaField & WoMediaService
+- Beautiful date pickers whith DateTimeService
 
 ## Getting started
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+To use WoMediaService, extend it with the features of your choice.
+
+```dart
+class WoMediaServiceImpl extends WoMediaService {
+  const WoMediaServiceImpl({required super.permissionService});
+
+  ...
+}
+```
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+Provide the services you need with the following code above your MaterialApp.
 
 ```dart
-const like = 'sample';
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<MediaService>(
+          create: (context) => WoMediaServiceImpl(
+            permissionService: context.read(),
+            // storageRepository: context.read(),
+          ),
+        ),
+        RepositoryProvider<WoMediaService>(
+          create: (context) =>
+              context.read<MediaService>() as WoMediaServiceImpl,
+        ),
+        RepositoryProvider(create: (context) => const DateTimeService()),
+      ],
+      child: MaterialApp(), // Your app here
+    );
+  }
+}
+
 ```
-
-## Additional information
-
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
