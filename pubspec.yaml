@@ -1,6 +1,6 @@
 name: wo_form_service
 description: "An implementation of services from wo_form."
-version: 0.0.1
+version: 1.0.0
 repository: https://github.com/BudgetChess/wo_form_service
 funding:
   - https://ko-fi.com/chresyr
