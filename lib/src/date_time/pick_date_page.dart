@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -49,7 +51,12 @@ class PickDatePage extends StatelessWidget {
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
-            final cellWidth = (constraints.maxWidth - 32) / 7;
+            final sideOverflow = constraints.maxWidth - 512;
+            final sidePadding = sideOverflow > 0 ? sideOverflow / 2 : .0;
+
+            final maxWidth = min(constraints.maxWidth, 512);
+
+            final cellWidth = (maxWidth - 32) / 7;
             var initialScrollOffset = 0.0;
             if (initialDate != null) {
               for (var i = 0;
@@ -64,7 +71,10 @@ class PickDatePage extends StatelessWidget {
               controller: initialDate == null
                   ? null
                   : ScrollController(initialScrollOffset: initialScrollOffset),
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.symmetric(
+                vertical: 16,
+                horizontal: 16 + sidePadding,
+              ),
               itemCount: maxDate == null
                   ? null
                   : maxDate!.fullMonth - minDate.fullMonth + 1,

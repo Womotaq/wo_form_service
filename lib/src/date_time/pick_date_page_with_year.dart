@@ -559,23 +559,29 @@ class DaysOfWeek extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-      ),
-      itemCount: 7,
-      itemBuilder: (context, index) {
-        return Center(
-          child: Text(
-            DateFormat(DateFormat.ABBR_WEEKDAY)
-                .format(DateTime(1, 1, 1 + index))[0]
-                .toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.bold),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 512),
+        child: GridView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7,
           ),
-        );
-      },
+          itemCount: 7,
+          itemBuilder: (context, index) {
+            return Center(
+              child: Text(
+                DateFormat(DateFormat.ABBR_WEEKDAY)
+                    .format(DateTime(1, 1, 1 + index))[0]
+                    .toUpperCase(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
