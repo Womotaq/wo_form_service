@@ -140,7 +140,12 @@ abstract class WoMediaService extends MediaService {
     );
     return croppedFile == null
         ? null
-        : MediaFile(file: XFile(croppedFile.path));
+        : MediaFile(
+            file: XFile(
+              croppedFile.path,
+              mimeType: 'image/${sourcePath.split('.').last}',
+            ),
+          );
   }
 
   Future<List<MediaFile>?> edit({
