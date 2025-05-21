@@ -22,9 +22,9 @@ dependencies:
   path_provider: ^2.1.5
   wo_form: ^1.3.0
 
-dependency_overrides:
-  wo_form:
-    path: ../wo_form
+# dependency_overrides:
+#   wo_form:
+#     path: ../wo_form
 
 dev_dependencies:
   very_good_analysis: ^7.0.0
