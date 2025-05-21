@@ -1,6 +1,6 @@
 name: wo_form_service
 description: "An implementation of services from wo_form."
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/Womotaq/wo_form_service
 funding:
   - https://ko-fi.com/chresyr
