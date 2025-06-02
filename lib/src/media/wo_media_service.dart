@@ -162,14 +162,19 @@ abstract class WoMediaService extends MediaService {
         case MediaFile(file: final file):
           sourcePath = file.path;
         case MediaUrl(url: final url):
-          final responseData = await http.get(Uri.parse(url));
-          final buffer = responseData.bodyBytes.buffer;
-          final byteData = ByteData.view(buffer);
-          final tempDir = await getTemporaryDirectory();
-          final file = await File('${tempDir.path}/img').writeAsBytes(
-            buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
-          );
-          sourcePath = file.path;
+          if (kIsWeb) {
+            sourcePath = url;
+          } else {
+            final responseData = await http.get(Uri.parse(url));
+            final buffer = responseData.bodyBytes.buffer;
+            final byteData = ByteData.view(buffer);
+            final tempDir = await getTemporaryDirectory();
+            final file = await File('${tempDir.path}/img').writeAsBytes(
+              buffer.asUint8List(
+                  byteData.offsetInBytes, byteData.lengthInBytes),
+            );
+            sourcePath = file.path;
+          }
       }
 
       final cropped = await _cropImage(
