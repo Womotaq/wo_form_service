@@ -409,9 +409,11 @@ class AddMediaButon extends StatelessWidget {
                 onChanged!(newMedias);
               },
         child: DottedBorder(
-          strokeWidth: 2,
-          color: Theme.of(context).colorScheme.outlineVariant,
-          dashPattern: const [8, 4],
+          options: RectDottedBorderOptions(
+            strokeWidth: 2,
+            color: Theme.of(context).colorScheme.outlineVariant,
+            dashPattern: const [8, 4],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
