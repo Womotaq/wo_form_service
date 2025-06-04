@@ -1,6 +1,6 @@
 name: wo_form_service
 description: "An implementation of services from wo_form."
-version: 1.0.1
+version: 1.0.2
 repository: https://github.com/Womotaq/wo_form_service
 funding:
   - https://ko-fi.com/chresyr
@@ -11,22 +11,18 @@ environment:
 
 dependencies:
   collection: ^1.18.0
-  dotted_border: ^2.1.0
+  dotted_border: ^3.0.1
   flutter:
     sdk: flutter
   flutter_bloc: ^9.0.0
   http: ^1.2.2
   image_cropper: ^9.0.0
   image_picker: ^1.1.2
-  intl: ^0.20.0
+  intl: ^0.20.2
   path_provider: ^2.1.5
-  wo_form: ^1.3.1
-
-# dependency_overrides:
-#   wo_form:
-#     path: ../wo_form
+  wo_form: ^1.3.2
 
 dev_dependencies:
-  very_good_analysis: ^7.0.0
+  very_good_analysis: ^8.0.0
 
 flutter:
